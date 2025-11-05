@@ -1,29 +1,22 @@
 import React from "react";
-import "./Footer.css";
+import "../styles/Footer.css";
 
 function Footer() {
   return (
     <footer className="footer">
-      <div className="footer-content">
-        <h3>TravelGuide</h3>
-        <p>Explore. Plan. Discover.</p>
-
-        <div className="footer-links">
-          <a href="/">Home</a>
-          <a href="/destinations">Destinations</a>
-          <a href="/about">About</a>
-          <a href="/contact">Contact</a>
+      <div className="footer-top">
+        <div>
+          <h3>Travor</h3>
+          <p>Your travel companion for discovering experiences worldwide.</p>
         </div>
-
-        <div className="footer-contact">
-          <p>Email: info@travelguide.com</p>
-          <p>Phone: +1 234 567 890</p>
-        </div>
-
-        <p className="copyright">
-          © {new Date().getFullYear()} TravelGuide | All rights reserved.
-        </p>
+        <ul>
+          <li>About</li>
+          <li>Careers</li>
+          <li>Contact</li>
+          <li>Blog</li>
+        </ul>
       </div>
+      <p className="footer-bottom">© 2025 Travor. All rights reserved.</p>
     </footer>
   );
 }

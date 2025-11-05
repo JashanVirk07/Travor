@@ -1,15 +1,19 @@
 import React from "react";
 import Navbar from "../components/Navbar";
-import Hero from "../components/Hero";
-import Features from "../components/Features";
+import HeroBanner from "../components/HeroBanner";
+import FeatureCards from "../components/FeatureCards";
+import OfferGrid from "../components/OfferGrid";
+import CTASection from "../components/CTASection";
 import Footer from "../components/Footer";
 
 function Home() {
   return (
     <>
       <Navbar />
-      <Hero />
-      <Features />
+      <HeroBanner />
+      <FeatureCards />
+      <OfferGrid />
+      <CTASection />
       <Footer />
     </>
   );

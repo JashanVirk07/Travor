@@ -1,0 +1,33 @@
+.footer {
+  background: #f9f9f9;
+  padding: 40px 80px;
+  color: #555;
+}
+
+.footer-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 20px;
+}
+
+.footer-top h3 {
+  color: #ff5a5f;
+}
+
+.footer-top ul {
+  list-style: none;
+  display: flex;
+  gap: 20px;
+}
+
+.footer-top li {
+  cursor: pointer;
+}
+
+.footer-bottom {
+  text-align: center;
+  margin-top: 15px;
+  font-size: 0.9rem;
+}
