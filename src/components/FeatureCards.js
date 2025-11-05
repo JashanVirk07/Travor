@@ -3,9 +3,9 @@ import "../styles/FeatureCards.css";
 
 function FeatureCards() {
   const features = [
-    { img: "https://img.icons8.com/color/96/000000/airport.png", title: "Airport Transfers", desc: "Seamless rides from airports worldwide." },
-    { img: "https://img.icons8.com/color/96/000000/roller-coaster.png", title: "Theme Parks", desc: "Skip the lines with instant booking." },
-    { img: "https://img.icons8.com/color/96/000000/train.png", title: "Rail Passes", desc: "Travel smoothly across destinations." },
+    { img: "https://img.icons8.com/color/96/000000/airport.png", title: "Authentic journeys for travellers", desc: "Go beyond the tourist traps. Find unique, hand-crafted itineraries from local experts." },
+    { img: "https://img.icons8.com/color/96/000000/roller-coaster.png", title: "Monetize Local Knowledge", desc: "Set your own rates and schedule. Connect directly with a global audience of eager travellers." },
+    { img: "https://img.icons8.com/color/96/000000/train.png", title: "**Trust & Safety**", desc: "Secure payments and verified profiles ensure a reliable and enjoyable experience for everyone." },
   ];
 
   return (

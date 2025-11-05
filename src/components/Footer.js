@@ -7,7 +7,7 @@ function Footer() {
       <div className="footer-top">
         <div>
           <h3>Travor</h3>
-          <p>Your travel companion for discovering experiences worldwide.</p>
+          <p>Your travel companion for discovering local experiences.</p>
         </div>
         <ul>
           <li>About</li>

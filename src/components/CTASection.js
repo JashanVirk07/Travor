@@ -5,7 +5,7 @@ function CTASection() {
   return (
     <section className="cta">
       <div className="cta-content">
-        <h2>Join Travor and Get 10% Off Your First Booking!</h2>
+        <h2>Become a Travor and Get Your First Booking Free!</h2>
         <button>Sign Up Now</button>
       </div>
     </section>
