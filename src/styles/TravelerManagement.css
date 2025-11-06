@@ -1,0 +1,30 @@
+.traveler-management {
+  display: flex;
+  height: 100vh;
+  background-color: #f9fafc;
+}
+
+.traveler-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #444;
+  background: #fff;
+}
+
+.explore-btn {
+  background-color: #ff6a00;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.explore-btn:hover {
+  background-color: #ff8500;
+}

@@ -11,6 +11,7 @@ function Navbar() {
         <li><a href="/">Local Guides</a></li>
         <li><a href="/destinations">Destinations</a></li>
         <li><a href="/about">About</a></li>
+        <li><a href="/myprofile">My profile</a></li>
       </ul>
       <div className="nav-buttons">
          <Link to="/login"> 
