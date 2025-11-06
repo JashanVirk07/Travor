@@ -6,6 +6,8 @@
   padding: 20px;
   text-align: center;
   font-family: 'Inter', sans-serif;
+  display: flex;
+  flex-direction: column;
 }
 
 .userSideHead .profile-photo {
@@ -59,4 +61,36 @@
   font-size: 14px;
   cursor: pointer;
   margin-top: 4px;
+}
+
+.menu-list{
+  padding-top: 1rem;
+  padding-left: 0;
+  padding-right: 0;
+  margin: 0;
+}
+
+.menu-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  color: #444;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.menu-list li:hover {
+  background: #f8faff;
+  border-color: #ff6a00;
+}
+
+.menu-list li.active {
+  border-color: #ff6a00;
+  background: #ffefe5;
+  color: #ff6a00;
+  font-weight: 600;
 }
