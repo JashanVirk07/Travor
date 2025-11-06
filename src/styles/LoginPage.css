@@ -1,0 +1,94 @@
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: #f9f9f9;
+}
+
+.login-box {
+  background: white;
+  padding: 40px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  width: 350px;
+}
+
+.login-box h2 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.login-box input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.login-box button {
+    width: 107%;
+  background-color: #ff5a5f;
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+.login-box button:hover {
+  background-color: #e14b4f;
+}
+
+
+
+/*for Image*/
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  /* Ensure the background image is the first thing tried */
+  
+  /* 🔑 Use this URL for reliability */
+  background-image: url('https://images.pexels.com/photos/386009/pexels-photo-386009.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'); 
+  background-size: cover; 
+  background-position: center; 
+  background-repeat: no-repeat;
+  
+  /* Setting a dark background color in case the image still fails */
+  background-color: #333; 
+  
+  position: relative;
+  z-index: 1; 
+}
+/* ... (rest of styles including ::before overlay) ... */
+
+/* Overlay for better text contrast */
+.login-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.35); /* Slightly darker overlay for contrast */
+    z-index: -1; 
+}
+
+.login-box {
+  background: rgba(255, 255, 255, 0.95); /* Semi-transparent white box for readability */
+  padding: 40px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2); 
+  width: 350px;
+  z-index: 10;
+}
+
+/* ... (rest of your existing styles) ... */

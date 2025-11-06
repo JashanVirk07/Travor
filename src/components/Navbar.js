@@ -13,8 +13,12 @@ function Navbar() {
         <li><a href="/about">About</a></li>
       </ul>
       <div className="nav-buttons">
-        <button className="login-btn">Login</button>
-        <button className="register-btn">Register</button>
+         <Link to="/login"> 
+            <button className="login-btn">Login</button>
+        </Link>
+        <Link to="/register">
+            <button className="register-btn">Register</button>
+        </Link>
       </div>
     </nav>
   );
