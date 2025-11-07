@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import "../styles/UserSidebar.css";
 
-function DestinationsSidebar({ activeTab, setActiveTab }) {
+function MyGuidesSidebar({ activeTab, setActiveTab }) {
   const fileInputRef = useRef(null);
   const [profileImage, setProfileImage] = useState("/avatar.png");
 
@@ -21,7 +21,7 @@ function DestinationsSidebar({ activeTab, setActiveTab }) {
   ];
 
   return (
-    <section className="DestinationsSidebar">
+    <section className="MyGuidesSidebar">
       <ul className="menu-list">
         {menuItems.map((item) => (
           <li
