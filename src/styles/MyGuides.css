@@ -1,0 +1,188 @@
+/* --- Global Layout --- */
+.my-guides-page {
+  width: 100%;
+  min-height: 100vh;
+  padding: 20px 40px;
+  font-family: "Inter", sans-serif;
+  background: #e6f0ff; 
+  display: flex;
+  flex-direction: column; 
+  gap: 20px;
+}
+
+/* --- Admin Container --- */
+.admin-container {
+  display: flex;
+  gap: 20px;
+}
+
+/* --- Sidebar --- */
+.my-guides-sidebar {
+  width: 220px;
+  background-color: #fff;
+  border-right: 1px solid #ddd;
+  padding-top: 20px;
+}
+
+.my-guides-sidebar .menu-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.my-guides-sidebar .menu-list li {
+  padding: 12px 45px;
+  cursor: pointer;
+  color: #007d9c; 
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  border-radius: 20px;
+  margin-bottom: 8px;
+}
+
+.my-guides-sidebar .menu-list li .icon {
+  margin-right: 10px;
+}
+
+.my-guides-sidebar .menu-list li:hover {
+  background-color: #005f7f; 
+  color: #ffffff;
+}
+
+.my-guides-sidebar .menu-list li.active {
+  background-color: #007d9c; 
+  color: white;
+  font-weight: bold;
+}
+
+
+.main-content {
+  display: flex;
+  flex: 1;
+  gap: 10px;
+}
+
+/* --- Admin Content --- */
+.admin-content {
+  flex: 3;
+  padding: 50px;
+  background-color: #f0f8ff; 
+  border-radius: 12px;
+  overflow-y: auto;
+}
+
+.sidebar-right-image {
+  flex: 1;
+  display: flex;
+  align-items: flex-start; 
+  justify-content: center;
+}
+
+
+
+/* --- Tabs (GuideManagement subTabs) --- */
+.guide-subtabs {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.guide-subtabs button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 25px; /* Oval */
+  cursor: pointer;
+  font-weight: 600;
+  background: #00b3b3; 
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.guide-subtabs button:hover {
+  background: #005f7f; 
+}
+
+.guide-subtabs button.active {
+  background: #007d9c; 
+}
+
+/* --- Tab Content --- */
+.tab-content {
+  background: rgba(240, 248, 255, 0.8); 
+  padding: 20px;
+  border-radius: 12px;
+}
+
+/* --- Buttons  --- */
+.my-guides-page button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 25px;
+  cursor: pointer;
+  font-weight: 600;
+  background: #00b3b3;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.my-guides-page button:hover {
+  background: #005f7f; 
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 100, 150, 0.4);
+}
+
+/* --- Overview / Section Box --- */
+.overview-section,
+.option-section,
+.review-section {
+  background: #ffffff;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 30px;
+}
+
+/* --- Guide Language Selector --- */
+.guide-language {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.language-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #444;
+}
+
+.language-select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 2px solid #00b3b3;
+  background: #ffffffcc;
+  font-size: 1rem;
+  color: #333;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.language-select:hover {
+  border-color: #005f7f;
+  background: #f0f8ff;
+}
+
+/* --- Button with info div on the right (top-aligned) --- */
+.button-with-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.button-with-info .info-box {
+  background-color: #f0f8ff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
