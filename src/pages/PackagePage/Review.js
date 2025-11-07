@@ -22,7 +22,7 @@ function Review() {
     <div className="review-section">
       <h2>Customer Reviews</h2>
 
-      {/* 星星評價 + 輸入框 */}
+      
       <div className="review-input">
         <div className="rating">
           {[1, 2, 3, 4, 5].map((star) => (
