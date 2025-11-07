@@ -1,0 +1,60 @@
+.package-management {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-family: Arial, sans-serif;
+}
+
+/* Navbar 區塊（可共用你現有的 Navbar） */
+.package-display {
+  display: flex;
+  flex: 1;
+  background-color: #f9f9f9;
+}
+
+/* Sidebar */
+.package-sidebar {
+  width: 220px;
+  background-color: #fff;
+  border-right: 1px solid #ddd;
+  padding-top: 20px;
+}
+
+.package-sidebar ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.package-sidebar li {
+  padding: 12px 20px;
+  cursor: pointer;
+  color: #444;
+  transition: background 0.2s;
+}
+
+.package-sidebar li:hover {
+  background-color: #f1f1f1;
+}
+
+.package-sidebar li.active {
+  background-color: #333;
+  color: white;
+  font-weight: bold;
+}
+
+/* 主內容區 */
+.package-content {
+  flex: 1;
+  padding: 30px;
+}
+
+.package-content h2 {
+  margin-top: 0;
+}
+
+.review-card {
+  border-top: 1px solid #ddd;
+  margin-top: 10px;
+  padding-top: 10px;
+}
