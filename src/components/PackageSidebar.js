@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useRef, useState } from "react";
+import "../styles/PackageSidebar.css";
 
 function PackageSidebar({ activeTab, setActiveTab }) {
   return (
