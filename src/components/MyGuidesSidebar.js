@@ -1,27 +1,17 @@
-import React, { useRef, useState } from "react";
+import React from "react";
 import "../styles/UserSidebar.css";
 
 function MyGuidesSidebar({ activeTab, setActiveTab }) {
-  const fileInputRef = useRef(null);
-  const [profileImage, setProfileImage] = useState("/avatar.png");
-
-  const handleImageClick = () => fileInputRef.current.click();
-
-  const handleImageChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const imageURL = URL.createObjectURL(file);
-      setProfileImage(imageURL);
-    }
-  };
-
   const menuItems = [
     { key: "guide", label: "Guide Management", icon: "🧑‍✈️" },
     { key: "package", label: "Package Management", icon: "📦" },
+    { key: "tour", label: "Tour Management", icon: "🗺️" },
+    { key: "stats", label: "Stats Overview", icon: "📊" },
+    { key: "settings", label: "Settings Panel", icon: "⚙️" },
   ];
 
   return (
-    <section className="MyGuidesSidebar">
+    <section className="my-guides-sidebar">
       <ul className="menu-list">
         {menuItems.map((item) => (
           <li
@@ -37,4 +27,5 @@ function MyGuidesSidebar({ activeTab, setActiveTab }) {
     </section>
   );
 }
-export default DestinationsSidebar;
+
+export default MyGuidesSidebar;

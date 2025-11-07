@@ -1,27 +1,29 @@
 import React, { useState } from "react";
 import Navbar from "../components/Navbar";
 import MyGuidesSidebar from "../components/MyGuidesSidebar";
-import GuideManagement from "../pages/GuideManagement";
-import PackagePage from "../pages/PackagePage/PackagePage";
-
+import GuideManagement from "./GuideManagement/GuideManagement";
+import TourManagement from "./GuideManagement/TourManagement";
+import StatsOverview from "./GuideManagement/StatsOverview";
+import SettingsPanel from "./GuideManagement/SettingsPanel";
+import PackageManagement from "./PackagePage/PackagePage";
+import "../styles/MyGuides.css";
 
 function MyGuides() {
-  const [activeTab, setActiveTab] = useState("guide");
+  const [activeTab, setActiveTab] = useState("package"); 
 
   return (
     <div className="admin-management">
       <Navbar />
-      <div className="admin-container" style={{ display: "flex" }}>
-        
-        <DestinationsSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <div className="admin-container">
+        <MyGuidesSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        
-        <section className="admin-content" style={{ flex: 1, padding: "20px" }}>
+        <section className="admin-content">
           {activeTab === "guide" && <GuideManagement />}
-          {activeTab === "package" && <PackagePage />}
-          {activeTab === "tour" && <h2>Tour Management Section</h2>}
-          {activeTab === "stats" && <h2>Stats Overview</h2>}
-          {activeTab === "settings" && <h2>Settings Panel</h2>}
+          {activeTab === "package" && <PackageManagement />}
+          {activeTab === "tour" && <TourManagement />}
+          {activeTab === "stats" && <StatsOverview />}
+          {activeTab === "settings" && <SettingsPanel />}
+            
         </section>
       </div>
     </div>
