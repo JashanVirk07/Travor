@@ -1,0 +1,9 @@
+export { default as BookingSection } from "./BookingSection.jsx";
+export { default as ReviewSection } from "./ReviewSection.jsx";
+export { default as PaymentSection } from "./PaymentSection.jsx";
+export { default as ParticipantSection } from "./ParticipantSection.jsx";
+export { default as ChatBoxSection } from "./ChatBoxSection.jsx";
+export { default as WishlistSection } from "./WishlistSection.jsx";
+export { default as LoginMethodsSection } from "./LoginMethodsSection.jsx";
+export { default as SettingsSection } from "./SettingsSection.jsx";
+export { default as PersonalInfoSection } from "./PersonalInfoSection.jsx";
