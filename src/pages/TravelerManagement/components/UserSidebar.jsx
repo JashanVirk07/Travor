@@ -4,7 +4,7 @@ import "./UserSidebar.css";
 
 function UserSidebar({ activeTab, setActiveTab }) {
   const fileInputRef = useRef(null);
-  const [profileImage, setProfileImage] = useState("/avatar.png");
+  const [profileImage, setProfileImage] = useState("/avatars/avatar.png");
 
   const handleImageClick = () => fileInputRef.current.click();
 
