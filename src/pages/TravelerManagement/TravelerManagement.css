@@ -1,0 +1,1052 @@
+.traveler-management {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background-color: #f9fafc;
+  min-height: calc(100vh - 70px);
+  margin-top: 0;
+}
+
+.traveler-displaychoice {
+  display: flex;
+  flex-direction: row;
+}
+
+.traveler-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  background: #fff;
+  color: #333;
+}
+
+/* ---------- Shared Section Layout ---------- */
+.section-content {
+  width: 100%;
+  padding: 20px 40px;
+}
+
+.section-title {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+.empty-state {
+  text-align: center;
+  color: #777;
+  margin-top: 50px;
+}
+
+/* ---------- Booking Section ---------- */
+.booking-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.booking-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease;
+}
+
+.booking-card:hover {
+  transform: translateY(-3px);
+}
+
+.booking-image {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+}
+
+.booking-info {
+  padding: 15px;
+}
+
+.booking-info h3 {
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+.status {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.status-confirmed {
+  color: #2563eb;
+}
+
+.status-pending {
+  color: #f59e0b;
+}
+
+.status-completed {
+  color: #22c55e;
+}
+
+/* ---------- Booking Subtitles ---------- */
+.sub-section-title {
+  font-size: 1.2rem;
+  color: #333;
+  margin-top: 30px;
+  margin-bottom: 10px;
+  border-left: 4px solid #2563eb;
+  padding-left: 10px;
+  font-weight: 600;
+}
+
+.completed-title {
+  color: #1e4ed8;
+}
+
+/* ---------- Completed Booking Row ---------- */
+.completed-booking-list {
+  opacity: 0.9;
+  filter: grayscale(10%);
+}
+
+.completed-card {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+}
+
+.empty-text {
+  color: #777;
+  margin-top: 10px;
+  text-align: center;
+}
+
+/* ---------- Review Section ---------- */
+.review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.review-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease;
+}
+
+.review-card:hover {
+  transform: translateY(-3px);
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.review-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.review-date {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.review-rating {
+  margin-top: 6px;
+  color: #ffb400;
+  font-size: 1.1rem;
+}
+
+.rating-number {
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.review-comment {
+  margin-top: 10px;
+  color: #444;
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* ---------- Payment Section ---------- */
+.payment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 15px;
+}
+
+.payment-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease;
+}
+
+.payment-card:hover {
+  transform: translateY(-3px);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.card-type {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #444;
+}
+
+.default-tag {
+  background-color: #2563eb;
+  color: #fff;
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+.card-body p {
+  margin: 3px 0;
+  color: #555;
+}
+
+.card-number {
+  font-family: "Courier New", monospace;
+  letter-spacing: 1px;
+}
+
+.card-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- Unified Button Styles ---------- */
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Primary Buttons */
+.explore-btn,
+.details-btn,
+.add-card-btn,
+.save-btn {
+  background-color: #2563eb;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  border: none;
+}
+
+.explore-btn:hover,
+.details-btn:hover,
+.add-card-btn:hover,
+.save-btn:hover {
+  background-color: #1e4ed8;
+}
+
+/* Secondary Buttons */
+.edit-btn,
+.remove-btn,
+.cancel-btn {
+  background: #fff;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: #2563eb;
+  font-weight: 500;
+}
+
+.edit-btn:hover,
+.remove-btn:hover,
+.cancel-btn:hover {
+  background-color: #2563eb;
+  color: #fff;
+}
+
+/* ---------- Modal ---------- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 25px 30px;
+  border-radius: 12px;
+  width: 380px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  animation: slideDown 0.3s ease;
+}
+
+.modal-content h3 {
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.modal-content label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.modal-content input,
+.modal-content select {
+  padding: 8px 10px;
+  margin-top: 5px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ---------- Participant Section ---------- */
+.participant-table-wrapper {
+  margin-top: 10px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  overflow-x: auto;
+}
+
+.participant-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.participant-table th,
+.participant-table td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid #eee;
+  padding: 1rem;
+}
+
+.participant-table th {
+  background-color: #f1f5ff;
+  color: #2563eb;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+}
+
+.participant-table tr:hover {
+  background-color: #f9fbff;
+}
+
+.role-badge {
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: capitalize;
+
+}
+
+.role-organizer {
+  background-color: #2563eb;
+  color: white;
+}
+
+.role-traveler {
+  background-color: #e0e7ff;
+  color: #1e40af;
+}
+
+.addParticipantButt {
+  padding-top: 1rem;
+}
+
+/* CHAT BOX SECTION — Two Column Messenger Layout */
+
+/* Layout wrapper (two-column) */
+.chat-layout {
+  display: flex;
+  gap: 20px;
+  height: 80vh;
+}
+
+
+/* LEFT SIDEBAR (chat list) */
+.chat-sidebar {
+  width: 30%;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.chat-sidebar-title {
+  margin-bottom: 15px;
+  color: #1252db;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.chat-room {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.chat-room:hover {
+  background: #f9fafc;
+  transform: translateY(-2px);
+}
+
+.chat-room.active {
+  background: #8bacf1;
+  color: white;
+  border-color: #8bacf1;
+}
+
+.chat-room-info h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.chat-room-info p {
+  margin: 2px 0 4px;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.chat-room.active .chat-room-info p {
+  color: #e0e7ff;
+}
+
+.chat-room-id {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.chat-room-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.chat-room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.chat-room-header h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.chat-time {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.chat-subtext {
+  color: #374151;
+  font-size: 0.9rem;
+  margin: 2px 0 4px 0;
+  font-weight: 500;
+}
+
+.chat-preview {
+  color: #6b7280;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+
+/* RIGHT MAIN CHAT PANEL     */
+
+.chat-main {
+  flex: 1;
+  background: #fff;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 20px;
+}
+
+/* Banner for Guide Chat */
+.chat-banner {
+  background: #e0f2fe;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  color: #0f172a;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.booking-id {
+  font-weight: 600;
+  color: #2563eb;
+}
+
+/* MESSAGE WINDOW            */
+
+.chat-avatar img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.chat-avatar-inline {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 8px;
+  align-self: flex-end;
+}
+
+.chat-avatar img,
+.chat-avatar-inline {
+  border: 2px solid #e5e7eb;
+  transition: transform 0.2s ease;
+}
+
+.chat-avatar img:hover,
+.chat-avatar-inline:hover {
+  transform: scale(1.05);
+  border-color: #8bacf1;
+}
+
+
+.chatbox-window {
+  flex: 1;
+  overflow-y: auto;
+  background: #f9fafc;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
+}
+
+.chat-message {
+  display: flex;
+  margin-bottom: 12px;
+}
+
+.chat-bubble {
+  max-width: 70%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  line-height: 1.4;
+  position: relative;
+  word-wrap: break-word;
+}
+
+.chat-time {
+  display: block;
+  font-size: 0.75rem;
+  color: #666;
+  text-align: right;
+  margin-top: 4px;
+}
+
+/* MESSAGE TYPES (SENDER)    */
+.chat-you {
+  justify-content: flex-end;
+}
+
+.chat-you .chat-bubble {
+  background: #2563eb;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.chat-travor .chat-bubble {
+  background: #e0e7ff;
+  color: #1e3a8a;
+  border-bottom-left-radius: 4px;
+}
+
+.chat-admin .chat-bubble {
+  background: #d1fae5;
+  color: #065f46;
+  border-bottom-left-radius: 4px;
+}
+
+/* INPUT BAR                 */
+.chatbox-input {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.chatbox-input input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.chatbox-input input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.send-btn {
+  background-color: #2563eb;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.send-btn:hover {
+  background-color: #1e4ed8;
+}
+
+
+
+/* RESPONSIVE BEHAVIOR       */
+@media (max-width: 900px) {
+  .chat-layout {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .chat-sidebar {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+}
+
+/* Wishlist Section — reuse Booking card structure */
+.wishlist-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.wishlist-price {
+  color: #2563eb;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* Blue button theme */
+.details-btn {
+  background-color: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.details-btn:hover {
+  background-color: #1e4ed8;
+}
+
+.remove-btn {
+  background-color: #f3f4f6;
+  color: #ef4444;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.remove-btn:hover {
+  background-color: #fee2e2;
+}
+
+/* Login Methods Section */
+.login-methods-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 15px;
+}
+
+.login-method-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease;
+}
+
+.login-method-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.login-method-icon img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  margin-right: 16px;
+}
+
+.login-method-info {
+  flex: 1;
+}
+
+.login-method-info h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: #111827;
+}
+
+.login-method-info p {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin: 4px 0 0 0;
+}
+
+.default-tag {
+  background-color: #2563eb;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  margin-left: 6px;
+}
+
+.locked-tag {
+  background-color: #d1d5db;
+  color: #374151;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.login-method-actions button {
+  background: #f3f4f6;
+  color: #ef4444;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+}
+
+.login-method-actions button:hover {
+  background-color: #fee2e2;
+}
+
+.add-method-btn {
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background-color 0.3s ease;
+}
+
+.add-method-btn:hover {
+  background-color: #1e4ed8;
+}
+
+/* Settings Section */
+.settings-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 700px;  /* ✅ make it narrower */
+}
+
+.settings-card h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #111827;
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+/* ✅ Remove column centering, align everything left */
+.settings-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; 
+  gap: 16px;
+  margin-top: 10px;
+}
+
+/* ✅ Style input checkbox smaller */
+.settings-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb; /* blue checkbox color */
+  cursor: pointer;
+}
+
+
+.settings-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #444;
+  margin: 8px 0;
+}
+
+.settings-card select {
+  width: 200px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #f9fafb;
+  font-size: 0.9rem;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.save-btn {
+  background-color: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+}
+
+.save-btn:hover {
+  background-color: #1e4ed8;
+}
+
+.deactivate-btn {
+  background-color: #f3f4f6;
+  color: #92400e;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.deactivate-btn:hover {
+  background-color: #fef3c7;
+}
+
+.delete-btn {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.delete-btn:hover {
+  background-color: #fecaca;
+}
+
+.danger-zone {
+  border-left: 5px solid #ef4444;
+}
+
+
+/* Personal Info Section */
+.personal-info-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.profile-photo-large {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.profile-photo-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-photo-large:hover .upload-overlay {
+  opacity: 1;
+}
+
+.personal-info-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.personal-info-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+  color: #444;
+  gap: 5px;
+}
+
+.personal-info-form input,
+.personal-info-form select {
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background-color: #f9fafb;
+}
+
+.personal-info-form input:focus,
+.personal-info-form select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+/* Upload overlay */
+.upload-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.save-btn {
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  margin-top: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.save-btn:hover {
+  background-color: #1e4ed8;
+}
