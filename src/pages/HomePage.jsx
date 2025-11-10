@@ -1,10 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../utils/colors';
 import { Icon } from '../components/Icons';
 
 const HomePage = () => {
   const { setCurrentPage } = useApp();
+
+  // Hover and focus states
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [hoveredFeature, setHoveredFeature] = useState(null);
+  const [hoveredExp, setHoveredExp] = useState(null);
+  const [hoveredCTA, setHoveredCTA] = useState(false);
+  const [hoveredLogin, setHoveredLogin] = useState(false);
+  const [hoveredSignup, setHoveredSignup] = useState(false);
+  const [hoveredStat, setHoveredStat] = useState(null);
 
   return (
     <div style={{ flex: 1 }}>
@@ -19,9 +28,23 @@ const HomePage = () => {
           <input
             type="text"
             placeholder="Search destination or guide..."
-            style={styles.searchInput}
+            style={{
+              ...styles.searchInput,
+              ...(searchFocused ? styles.searchInputFocus : {}),
+            }}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
           />
-          <button style={styles.searchButton}>Search</button>
+          <button
+            style={{
+              ...styles.searchButton,
+              ...(hoveredCTA ? styles.searchButtonHover : {}),
+            }}
+            onMouseEnter={() => setHoveredCTA(true)}
+            onMouseLeave={() => setHoveredCTA(false)}
+          >
+            Search
+          </button>
         </div>
       </section>
 
@@ -46,7 +69,15 @@ const HomePage = () => {
                 desc: 'Secure payments and verified profiles ensure a reliable experience for everyone.',
               },
             ].map((feature, i) => (
-              <div key={i} style={styles.featureCard}>
+              <div
+                key={i}
+                style={{
+                  ...styles.featureCard,
+                  ...(hoveredFeature === i ? styles.featureCardHover : {}),
+                }}
+                onMouseEnter={() => setHoveredFeature(i)}
+                onMouseLeave={() => setHoveredFeature(null)}
+              >
                 <div style={styles.featureIcon}>{feature.icon}</div>
                 <h3 style={styles.featureTitle}>{feature.title}</h3>
                 <p style={styles.featureDesc}>{feature.desc}</p>
@@ -81,8 +112,23 @@ const HomePage = () => {
                 rating: 4.9,
               },
             ].map((exp, i) => (
-              <div key={i} style={styles.experienceCard}>
-                <img src={exp.img} alt={exp.title} style={styles.experienceImage} />
+              <div
+                key={i}
+                style={{
+                  ...styles.experienceCard,
+                  ...(hoveredExp === i ? styles.experienceCardHover : {}),
+                }}
+                onMouseEnter={() => setHoveredExp(i)}
+                onMouseLeave={() => setHoveredExp(null)}
+              >
+                <img
+                  src={exp.img}
+                  alt={exp.title}
+                  style={{
+                    ...styles.experienceImage,
+                    ...(hoveredExp === i ? styles.experienceImageHover : {}),
+                  }}
+                />
                 <div style={styles.experienceContent}>
                   <h3 style={styles.experienceTitle}>{exp.title}</h3>
                   <div style={styles.experienceRating}>
@@ -104,8 +150,13 @@ const HomePage = () => {
             Become a Guide and Get Your First Booking Free!
           </h2>
           <button
-            style={styles.ctaButton}
+            style={{
+              ...styles.ctaButton,
+              ...(hoveredCTA ? styles.ctaButtonHover : {}),
+            }}
             onClick={() => setCurrentPage('register')}
+            onMouseEnter={() => setHoveredCTA(true)}
+            onMouseLeave={() => setHoveredCTA(false)}
           >
             Sign Up Now
           </button>
@@ -122,8 +173,20 @@ const HomePage = () => {
               { number: '100K+', label: 'Happy Travelers' },
               { number: '4.9★', label: 'Average Rating' },
             ].map((stat, i) => (
-              <div key={i} style={styles.statCard}>
-                <div style={styles.statNumber}>{stat.number}</div>
+              <div
+                key={i}
+                style={styles.statCard}
+                onMouseEnter={() => setHoveredStat(i)}
+                onMouseLeave={() => setHoveredStat(null)}
+              >
+                <div
+                  style={{
+                    ...styles.statNumber,
+                    ...(hoveredStat === i ? styles.statNumberHover : {}),
+                  }}
+                >
+                  {stat.number}
+                </div>
                 <div style={styles.statLabel}>{stat.label}</div>
               </div>
             ))}
@@ -136,8 +199,8 @@ const HomePage = () => {
 
 const styles = {
   hero: {
-    background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
-    padding: '100px 24px',
+    background: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1470&q=80') center/cover no-repeat`,
+    padding: '150px 24px 200px 24px', // taller hero
     textAlign: 'center',
     color: 'white',
   },
@@ -146,11 +209,13 @@ const styles = {
     fontWeight: 'bold',
     marginBottom: '16px',
     lineHeight: '1.2',
+    transition: 'transform 0.5s, opacity 0.5s',
   },
   heroSubtitle: {
     fontSize: '20px',
     marginBottom: '32px',
     opacity: 0.95,
+    transition: 'opacity 0.5s',
   },
   searchBar: {
     display: 'flex',
@@ -169,6 +234,11 @@ const styles = {
     outline: 'none',
     fontSize: '16px',
     padding: '8px',
+    transition: 'all 0.3s',
+  },
+  searchInputFocus: {
+    boxShadow: '0 0 10px rgba(0, 123, 255, 0.5)',
+    transform: 'scale(1.02)',
   },
   searchButton: {
     background: COLORS.primary,
@@ -178,6 +248,11 @@ const styles = {
     borderRadius: '50px',
     fontWeight: '600',
     cursor: 'pointer',
+    transition: 'all 0.3s',
+  },
+  searchButtonHover: {
+    transform: 'scale(1.05)',
+    background: COLORS.secondary,
   },
   featuresSection: {
     padding: '80px 24px',
@@ -198,7 +273,11 @@ const styles = {
     borderRadius: '16px',
     boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
     textAlign: 'center',
-    transition: 'transform 0.3s',
+    transition: 'transform 0.3s, box-shadow 0.3s',
+  },
+  featureCardHover: {
+    transform: 'translateY(-10px)',
+    boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
   },
   featureIcon: {
     color: COLORS.primary,
@@ -235,12 +314,20 @@ const styles = {
     overflow: 'hidden',
     boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
     cursor: 'pointer',
-    transition: 'transform 0.3s',
+    transition: 'transform 0.3s, box-shadow 0.3s',
+  },
+  experienceCardHover: {
+    transform: 'translateY(-8px)',
+    boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
   },
   experienceImage: {
     width: '100%',
     height: '250px',
     objectFit: 'cover',
+    transition: 'transform 0.5s',
+  },
+  experienceImageHover: {
+    transform: 'scale(1.05)',
   },
   experienceContent: {
     padding: '20px',
@@ -287,6 +374,12 @@ const styles = {
     fontSize: '18px',
     fontWeight: '600',
     cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+  ctaButtonHover: {
+    background: COLORS.primary,
+    color: 'white',
+    transform: 'scale(1.05)',
   },
   statsSection: {
     padding: '80px 24px',
@@ -308,6 +401,10 @@ const styles = {
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     marginBottom: '12px',
+    transition: 'transform 0.3s',
+  },
+  statNumberHover: {
+    transform: 'scale(1.1)',
   },
   statLabel: {
     fontSize: '18px',
