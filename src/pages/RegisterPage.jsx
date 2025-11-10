@@ -1,92 +1,267 @@
-import React, { useState } from "react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../firebase"; // Import auth and db
-import { useNavigate } from "react-router-dom";
-import "../styles/RegisterPage.css"; 
+import React, { useState } from 'react';
+import { useApp } from '../context/AppContext';
+import { COLORS } from '../utils/colors';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 
-function RegisterPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  // State to hold the selected role
-  const [role, setRole] = useState("Traveller"); 
-  const [error, setError] = useState(null);
-  const navigate = useNavigate();
+const RegisterPage = () => {
+  const { setCurrentPage } = useApp();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    role: 'traveler',
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    setError(null);
+    setError('');
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      // 1. Create the user in Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      // 2. Store the user's role in Firestore
-      await setDoc(doc(db, "users", user.uid), {
-        email: email,
-        role: role, // The role ('Traveller' or 'Guide')
-        createdAt: new Date(),
-        // Add more fields here (e.g., name, photoUrl)
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
+
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        createdAt: new Date().toISOString(),
       });
-      
-      alert(`Registration successful! You are signed up as a ${role}.`);
-      navigate("/"); // Redirect to Home or Profile page
+
+      setCurrentPage('myprofile');
     } catch (err) {
-      console.error("Registration Error:", err.message);
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="register-container">
-      {/* ➡️ ADDED THE register-box WRAPPER */}
-      <div className="register-box">  
-      <h2>Join Travor</h2>
-      <form onSubmit={handleRegister} className="register-form">
-        
-        {/* Role Selection */}
-        <div className="role-selector">
-          <p>Sign up as:</p>
-          <div className="role-btn-wrapper">
-          <button 
-            type="button" 
-            onClick={() => setRole("Traveller")}
-            className={role === "Traveller" ? "role-btn active" : "role-btn"}
-          >
-            Traveller
-          </button>
-          <button 
-            type="button" 
-            onClick={() => setRole("Guide")}
-            className={role === "Guide" ? "role-btn active" : "role-btn"}
-          >
-            Local Guide
-          </button>
+    <div style={styles.page}>
+      <div style={styles.formContainer}>
+        <h2 style={styles.title}>Join Travor</h2>
+        <p style={styles.subtitle}>Create your account and start exploring</p>
+
+        <div style={styles.roleSelector}>
+          <p style={styles.roleSelectorLabel}>Sign up as:</p>
+          <div style={styles.roleButtons}>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, role: 'traveler' })}
+              style={{
+                ...styles.roleButton,
+                ...(formData.role === 'traveler' ? styles.roleButtonActive : {}),
+              }}
+            >
+              Traveler
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, role: 'guide' })}
+              style={{
+                ...styles.roleButton,
+                ...(formData.role === 'guide' ? styles.roleButtonActive : {}),
+              }}
+            >
+              Local Guide
+            </button>
           </div>
         </div>
 
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <button type="submit" className="register-submit-btn">Register as {role}</button>
-        
-        {error && <p className="error-message">{error}</p>}
-      </form>
+        <form onSubmit={handleRegister} style={styles.form}>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Full Name</label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              style={styles.input}
+              required
+            />
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Email</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              style={styles.input}
+              required
+            />
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Password</label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              style={styles.input}
+              required
+            />
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Confirm Password</label>
+            <input
+              type="password"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              style={styles.input}
+              required
+            />
+          </div>
+
+          {error && <div style={styles.error}>{error}</div>}
+
+          <button type="submit" style={styles.submitButton} disabled={loading}>
+            {loading ? 'Creating account...' : 'Register'}
+          </button>
+        </form>
+
+        <p style={styles.switchText}>
+          Already have an account?{' '}
+          <span style={styles.link} onClick={() => setCurrentPage('login')}>
+            Sign in
+          </span>
+        </p>
       </div>
     </div>
   );
-}
+};
+
+const styles = {
+  page: {
+    minHeight: 'calc(100vh - 140px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px 24px',
+    background: `linear-gradient(135deg, ${COLORS.light} 0%, ${COLORS.primaryLight}20 100%)`,
+  },
+  formContainer: {
+    background: 'white',
+    padding: '48px',
+    borderRadius: '16px',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
+    width: '100%',
+    maxWidth: '450px',
+  },
+  title: {
+    fontSize: '32px',
+    fontWeight: 'bold',
+    marginBottom: '8px',
+    color: '#333',
+    textAlign: 'center',
+  },
+  subtitle: {
+    color: '#666',
+    marginBottom: '24px',
+    textAlign: 'center',
+  },
+  roleSelector: {
+    marginBottom: '24px',
+    padding: '20px',
+    background: COLORS.light,
+    borderRadius: '12px',
+  },
+  roleSelectorLabel: {
+    fontWeight: '600',
+    marginBottom: '12px',
+    color: '#333',
+  },
+  roleButtons: {
+    display: 'flex',
+    gap: '12px',
+  },
+  roleButton: {
+    flex: 1,
+    padding: '12px',
+    border: `2px solid ${COLORS.border}`,
+    borderRadius: '8px',
+    background: 'white',
+    color: '#666',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.3s',
+  },
+  roleButtonActive: {
+    background: COLORS.primary,
+    color: 'white',
+    borderColor: COLORS.primary,
+  },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  label: {
+    marginBottom: '8px',
+    fontWeight: '600',
+    color: '#333',
+  },
+  input: {
+    padding: '12px',
+    border: `2px solid ${COLORS.border}`,
+    borderRadius: '8px',
+    fontSize: '16px',
+    outline: 'none',
+  },
+  submitButton: {
+    background: COLORS.primary,
+    color: 'white',
+    border: 'none',
+    padding: '14px',
+    borderRadius: '8px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    marginTop: '8px',
+  },
+  error: {
+    background: '#fee',
+    color: COLORS.danger,
+    padding: '12px',
+    borderRadius: '8px',
+    fontSize: '14px',
+  },
+  switchText: {
+    textAlign: 'center',
+    marginTop: '24px',
+    color: '#666',
+  },
+  link: {
+    color: COLORS.primary,
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+};
 
 export default RegisterPage;
