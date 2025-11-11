@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { COLORS } from '../utils/colors';
 import { Icon } from '../components/Icons';
 
 const HomePage = () => {
-  const { setCurrentPage } = useApp();
+  const { setCurrentPage } = useAuth();
 
   // Hover and focus states
   const [searchFocused, setSearchFocused] = useState(false);

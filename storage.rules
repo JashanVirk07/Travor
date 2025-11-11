@@ -1,0 +1,103 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return request.auth != null &&
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isValidImageType() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    function isValidDocumentType() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('application/pdf');
+    }
+    
+    function isValidVideoType() {
+      return request.resource.contentType.matches('video/.*');
+    }
+    
+    function isValidSize(maxSizeMB) {
+      return request.resource.size < maxSizeMB * 1024 * 1024;
+    }
+    
+    // User profile images
+    match /users/{userId}/profile/{fileName} {
+      // Anyone can read profile images
+      allow read: if true;
+      
+      // Users can upload their own profile images (max 5MB)
+      allow write: if isOwner(userId) && 
+                     isValidImageType() && 
+                     isValidSize(5);
+    }
+    
+    // User verification documents
+    match /users/{userId}/verification/{fileName} {
+      // Only the user and admins can read verification documents
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can upload verification documents (max 10MB)
+      allow write: if isOwner(userId) && 
+                     isValidDocumentType() && 
+                     isValidSize(10);
+    }
+    
+    // Guide portfolio images
+    match /users/{userId}/portfolio/{fileName} {
+      // Anyone can read portfolio images
+      allow read: if true;
+      
+      // Guides can upload portfolio images (max 5MB each)
+      allow write: if isOwner(userId) && 
+                     isValidImageType() && 
+                     isValidSize(5);
+    }
+    
+    // Guide video introductions
+    match /users/{userId}/videos/{fileName} {
+      // Anyone can read guide videos
+      allow read: if true;
+      
+      // Guides can upload video introductions (max 50MB)
+      allow write: if isOwner(userId) && 
+                     isValidVideoType() && 
+                     isValidSize(50);
+    }
+    
+    // Tour images
+    match /tours/{tourId}/{fileName} {
+      // Anyone can read tour images
+      allow read: if true;
+      
+      // Tour creators can upload images (max 5MB)
+      allow write: if isAuthenticated() && 
+                     isValidImageType() && 
+                     isValidSize(5);
+    }
+    
+    // Admin files
+    match /admin/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

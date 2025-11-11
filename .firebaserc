@@ -1,0 +1,8 @@
+# Create .firebaserc
+@"
+{
+  "projects": {
+    "default": "travor-5908e"
+  }
+}
+"@ | Out-File -FilePath ".firebaserc" -Encoding utf8 -NoNewline
