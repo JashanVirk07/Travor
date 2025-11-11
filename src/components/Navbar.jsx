@@ -1,12 +1,13 @@
+// src/components/Navbar.jsx
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext.jsx';
+import { useAuth } from '../context/AuthContext';
 import { COLORS } from '../utils/colors.js';
-import { Icon } from './Icons.jsx';
+import { Icon } from './Icons.jsx'; // Make sure this exports Icon.User correctly
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
 const Navbar = () => {
-  const { currentPage, setCurrentPage, user } = useApp();
+  const { currentPage, setCurrentPage, currentUser } = useAuth();
 
   const [hoveredLink, setHoveredLink] = useState(null);
   const [hoveredButton, setHoveredButton] = useState(null);
@@ -31,6 +32,7 @@ const Navbar = () => {
   return (
     <nav style={styles.navbar}>
       <div style={styles.navContainer}>
+        {/* Brand */}
         <div
           style={{
             ...styles.navBrand,
@@ -43,8 +45,9 @@ const Navbar = () => {
           Travor
         </div>
 
+        {/* Navigation Links */}
         <ul style={styles.navLinks}>
-          {navItems.map(item => (
+          {navItems.map((item) => (
             <li key={item.page}>
               <a
                 onClick={() => setCurrentPage(item.page)}
@@ -62,13 +65,16 @@ const Navbar = () => {
           ))}
         </ul>
 
+        {/* Buttons */}
         <div style={styles.navButtons}>
-          {user ? (
+          {currentUser ? (
             <>
               <button
                 style={{
                   ...styles.profileButton,
-                  ...(hoveredButton === 'profile' ? { background: COLORS.primary, color: 'white', transform: 'scale(1.05)' } : {}),
+                  ...(hoveredButton === 'profile'
+                    ? { background: COLORS.primary, color: 'white', transform: 'scale(1.05)' }
+                    : {}),
                 }}
                 onClick={() => setCurrentPage('myprofile')}
                 onMouseEnter={() => setHoveredButton('profile')}
@@ -77,10 +83,13 @@ const Navbar = () => {
                 <Icon.User />
                 <span>My Profile</span>
               </button>
+
               <button
                 style={{
                   ...styles.logoutButton,
-                  ...(hoveredButton === 'logout' ? { background: '#ff4d4d', color: 'white', transform: 'scale(1.05)' } : {}),
+                  ...(hoveredButton === 'logout'
+                    ? { background: '#ff4d4d', color: 'white', transform: 'scale(1.05)' }
+                    : {}),
                 }}
                 onClick={handleLogout}
                 onMouseEnter={() => setHoveredButton('logout')}
@@ -94,7 +103,9 @@ const Navbar = () => {
               <button
                 style={{
                   ...styles.loginButton,
-                  ...(hoveredButton === 'login' ? { background: COLORS.primary, color: 'white', transform: 'scale(1.05)' } : {}),
+                  ...(hoveredButton === 'login'
+                    ? { background: COLORS.primary, color: 'white', transform: 'scale(1.05)' }
+                    : {}),
                 }}
                 onClick={() => setCurrentPage('login')}
                 onMouseEnter={() => setHoveredButton('login')}
@@ -102,10 +113,13 @@ const Navbar = () => {
               >
                 Login
               </button>
+
               <button
                 style={{
                   ...styles.registerButton,
-                  ...(hoveredButton === 'register' ? { background: COLORS.secondary, transform: 'scale(1.05)' } : {}),
+                  ...(hoveredButton === 'register'
+                    ? { background: COLORS.secondary, transform: 'scale(1.05)' }
+                    : {}),
                 }}
                 onClick={() => setCurrentPage('register')}
                 onMouseEnter={() => setHoveredButton('register')}
