@@ -1,5 +1,5 @@
 import React from 'react';
-import { useApp } from './context/AppContext.jsx';
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import HomePage from './pages/HomePage.jsx';
@@ -9,9 +9,10 @@ import GuidesPage from './pages/GuidesPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import { BrowserRouter as Routes, Route, Navigate } from 'react-router-dom';
 
 const App = () => {
-  const { currentPage, loading } = useApp();
+  const { currentPage, loading } = useAuth();
 
   if (loading) {
     return (

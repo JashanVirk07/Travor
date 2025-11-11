@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext.jsx';
 import { COLORS } from '../utils/colors';
 import { Icon } from '../components/Icons';
 
 const MyProfilePage = () => {
-  const { user } = useApp();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [editingPersonal, setEditingPersonal] = useState(false);
   const [personalInfo, setPersonalInfo] = useState({
