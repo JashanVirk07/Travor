@@ -1,83 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { guideService } from '../services/firestoreService';
 import { COLORS } from '../utils/colors';
 import { Icon } from '../components/Icons';
 
 const GuidesPage = () => {
+  // State for fetching and filtering
+  const [allGuides, setAllGuides] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const guides = [
-    {
-      id: 1,
-      name: 'Maria Santos',
-      location: 'Barcelona, Spain',
-      rating: 4.9,
-      reviews: 156,
-      img: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-      languages: ['Spanish', 'English'],
-      tours: 12,
-      bio: 'Passionate about sharing Barcelona culture and history',
-    },
-    {
-      id: 2,
-      name: 'Kenji Tanaka',
-      location: 'Tokyo, Japan',
-      rating: 4.8,
-      reviews: 203,
-      img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-      languages: ['Japanese', 'English'],
-      tours: 8,
-      bio: 'Expert in traditional and modern Tokyo experiences',
-    },
-    {
-      id: 3,
-      name: 'Sophie Laurent',
-      location: 'Paris, France',
-      rating: 4.9,
-      reviews: 178,
-      img: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-      languages: ['French', 'English'],
-      tours: 15,
-      bio: 'Art history enthusiast and Parisian native',
-    },
-    {
-      id: 4,
-      name: 'Marco Rossi',
-      location: 'Rome, Italy',
-      rating: 4.7,
-      reviews: 142,
-      img: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-      languages: ['Italian', 'English', 'Spanish'],
-      tours: 10,
-      bio: 'Ancient Rome specialist with 10 years experience',
-    },
-    {
-      id: 5,
-      name: 'Emma Johnson',
-      location: 'London, UK',
-      rating: 4.8,
-      reviews: 189,
-      img: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
-      languages: ['English', 'French'],
-      tours: 14,
-      bio: 'Royal history and hidden gems of London',
-    },
-    {
-      id: 6,
-      name: 'Carlos Rivera',
-      location: 'Barcelona, Spain',
-      rating: 4.9,
-      reviews: 221,
-      img: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200',
-      languages: ['Spanish', 'English', 'Catalan'],
-      tours: 18,
-      bio: 'Food and wine expert, Gaudi architecture specialist',
-    },
-  ];
+  // --- Data Fetching Effect ---
+  useEffect(() => {
+    // This simple check prevents running if the service object is not yet fully available
+    if (!guideService || !guideService.getAllGuides) {
+        // Log a warning, but don't set loading to false as Firebase might still be initializing
+        console.warn("Guide service not ready. Waiting for Firestore initialization...");
+        return; 
+    }
 
-  const filteredGuides = guides.filter((guide) =>
-    guide.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    guide.location.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    const fetchGuides = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Fetch all verified guides from Firestore
+        const data = await guideService.getAllGuides();
+        setAllGuides(data);
+      } catch (err) {
+        console.error('Error fetching guides:', err);
+        setError('Failed to load guides. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGuides();
+    
+    // The dependency array is empty, running only on mount.
+  }, []);
+
+  // Client-side filtering logic
+  const filteredGuides = allGuides.filter((guide) => {
+    const query = searchQuery.toLowerCase();
+    
+    // Search by full name, location, or languages (case-insensitive)
+    const matchesName = (guide.fullName || '').toLowerCase().includes(query);
+    const matchesLocation = (guide.location || '').toLowerCase().includes(query);
+    const matchesLanguage = (guide.languages || []).some(lang => 
+      lang.toLowerCase().includes(query)
+    );
+    
+    return matchesName || matchesLocation || matchesLanguage;
+  });
 
   return (
     <div style={styles.page}>
@@ -85,10 +59,11 @@ const GuidesPage = () => {
         <h1 style={styles.pageTitle}>Find Your Perfect Guide</h1>
         <p style={styles.pageSubtitle}>Connect with verified local experts</p>
         <div style={styles.searchBar}>
-          <Icon.Search />
+          {/* Using Icon component for Search */}
+          <Icon.Search style={{fontSize: '20px'}} />
           <input
             type="text"
-            placeholder="Search by location or language..."
+            placeholder="Search by name, location, or language..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={styles.searchInput}
@@ -97,30 +72,64 @@ const GuidesPage = () => {
       </div>
 
       <div style={styles.container}>
+        {/* Loading and Error Indicators */}
+        {loading && (
+          <div style={styles.messageBox}>
+            Loading verified guides...
+          </div>
+        )}
+        {error && (
+          <div style={{...styles.messageBox, color: COLORS.error}}>
+            Error: {error}
+          </div>
+        )}
+        
+        {!loading && filteredGuides.length === 0 && !error && (
+            <div style={{...styles.messageBox, color: COLORS.gray}}>
+                {searchQuery 
+                    ? `No guides match your search query: "${searchQuery}"`
+                    : "No guides found. Add some guides to the database!"
+                }
+            </div>
+        )}
+
+        {/* Guides Grid */}
         <div style={styles.guidesGrid}>
           {filteredGuides.map((guide) => (
-            <div key={guide.id} style={styles.guideCard}>
-              <img src={guide.img} alt={guide.name} style={styles.guideImage} />
+            <div key={guide.guideId} style={styles.guideCard}>
+              {/* Using a stable placeholder image with guideId as seed */}
+              <img 
+                src={`https://i.pravatar.cc/150?u=${guide.guideId}`} 
+                alt={guide.fullName} 
+                style={styles.guideImage}
+                // Fallback for image loading
+                onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://placehold.co/120x120/a8a8a8/ffffff?text=Guide";
+                }}
+              />
               <div style={styles.guideContent}>
-                <h3 style={styles.guideName}>{guide.name}</h3>
+                <h3 style={styles.guideName}>{guide.fullName || 'Unknown Guide'}</h3>
                 <div style={styles.guideLocation}>
-                  <Icon.MapPin />
-                  <span>{guide.location}</span>
+                  <Icon.MapPin style={{color: COLORS.primary, width: '16px', height: '16px'}} />
+                  <span>{guide.location || 'Global'}</span>
                 </div>
                 <div style={styles.guideRating}>
-                  <Icon.Star filled />
-                  <span>{guide.rating}</span>
-                  <span style={styles.guideReviews}>({guide.reviews} reviews)</span>
+                  {/* Using Icon component for Star */}
+                  <Icon.Star filled style={{fontSize: '18px'}} />
+                  {/* Displaying rating and review count from Firebase data structure */}
+                  <span>{guide.rating ? guide.rating.toFixed(1) : 'New'}</span>
+                  <span style={styles.guideReviews}>({guide.reviewCount || 0} reviews)</span>
                 </div>
-                <p style={styles.guideBio}>{guide.bio}</p>
+                <p style={styles.guideBio}>{guide.bio || 'A dedicated and knowledgeable local expert.'}</p>
                 <div style={styles.guideLanguages}>
-                  {guide.languages.map((lang) => (
+                  {(guide.languages || []).map((lang) => (
                     <span key={lang} style={styles.languageBadge}>
                       {lang}
                     </span>
                   ))}
                 </div>
-                <div style={styles.guideTours}>{guide.tours} tours available</div>
+                <div style={styles.guideTours}>{guide.tourCount || 0} tours available</div>
                 <button style={styles.viewGuideButton}>View Profile</button>
               </div>
             </div>
@@ -131,6 +140,7 @@ const GuidesPage = () => {
   );
 };
 
+// NOTE: Styles remain consistent with your original definitions
 const styles = {
   page: {
     flex: 1,
@@ -162,6 +172,7 @@ const styles = {
     maxWidth: '600px',
     margin: '0 auto',
     color: COLORS.gray,
+    boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
   },
   searchInput: {
     flex: 1,
@@ -174,6 +185,13 @@ const styles = {
     maxWidth: '1200px',
     margin: '0 auto',
     padding: '60px 24px',
+  },
+  messageBox: {
+    textAlign: 'center', 
+    padding: '40px', 
+    fontSize: '20px', 
+    fontWeight: '500', 
+    color: COLORS.text
   },
   guidesGrid: {
     display: 'grid',
@@ -194,7 +212,7 @@ const styles = {
     borderRadius: '50%',
     objectFit: 'cover',
     margin: '32px auto 16px',
-    border: '4px solid #fff',
+    border: `4px solid ${COLORS.primary}`,
     boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
   },
   guideContent: {
@@ -263,6 +281,8 @@ const styles = {
     borderRadius: '8px',
     fontWeight: '600',
     cursor: 'pointer',
+    boxShadow: '0 4px 10px rgba(0, 150, 255, 0.4)',
+    transition: 'opacity 0.3s',
   },
 };
 
