@@ -10,6 +10,7 @@ import GuidesPage from './pages/GuidesPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import GuideDashboardPage from './pages/GuideDashboardPage.jsx';
 
 const AppContent = () => {
   const { currentPage, loading } = useAuth();
@@ -38,6 +39,8 @@ const AppContent = () => {
         return <LoginPage />;
       case 'register':
         return <RegisterPage />;
+      case 'guide-dashboard':
+      return <GuideDashboardPage />;
       default:
         return <HomePage />;
     }
