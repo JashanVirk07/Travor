@@ -2,12 +2,12 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { COLORS } from '../utils/colors.js';
-import { Icon } from './Icons.jsx'; // Make sure this exports Icon.User correctly
+import { Icon } from './Icons.jsx';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
 const Navbar = () => {
-  const { currentPage, setCurrentPage, currentUser } = useAuth();
+  const { currentPage, setCurrentPage, currentUser, userProfile } = useAuth();
 
   const [hoveredLink, setHoveredLink] = useState(null);
   const [hoveredButton, setHoveredButton] = useState(null);
@@ -32,7 +32,6 @@ const Navbar = () => {
   return (
     <nav style={styles.navbar}>
       <div style={styles.navContainer}>
-        {/* Brand */}
         <div
           style={{
             ...styles.navBrand,
@@ -45,30 +44,46 @@ const Navbar = () => {
           Travor
         </div>
 
-        {/* Navigation Links */}
         <ul style={styles.navLinks}>
-          {navItems.map((item) => (
-            <li key={item.page}>
-              <a
-                onClick={() => setCurrentPage(item.page)}
-                onMouseEnter={() => setHoveredLink(item.page)}
-                onMouseLeave={() => setHoveredLink(null)}
-                style={{
-                  ...styles.navLink,
-                  ...(currentPage === item.page ? styles.navLinkActive : {}),
-                  ...(hoveredLink === item.page ? { color: COLORS.primary, transform: 'scale(1.05)' } : {}),
-                }}
-              >
-                {item.label}
-              </a>
-            </li>
-          ))}
+          {navItems.map((item) => {
+            return (
+              <li key={item.page}>
+                <a
+                  onClick={() => setCurrentPage(item.page)}
+                  onMouseEnter={() => setHoveredLink(item.page)}
+                  onMouseLeave={() => setHoveredLink(null)}
+                  style={{
+                    ...styles.navLink,
+                    ...(currentPage === item.page ? styles.navLinkActive : {}),
+                    ...(hoveredLink === item.page ? { color: COLORS.primary, transform: 'scale(1.05)' } : {}),
+                  }}
+                >
+                  {item.label}
+                </a>
+              </li>
+            );
+          })}
         </ul>
 
-        {/* Buttons */}
         <div style={styles.navButtons}>
           {currentUser ? (
-            <>
+            <React.Fragment>
+              {userProfile?.role === 'guide' && (
+                <button
+                  style={{
+                    ...styles.dashboardButton,
+                    ...(hoveredButton === 'dashboard'
+                      ? { background: COLORS.secondary, color: 'white', transform: 'scale(1.05)' }
+                      : {}),
+                  }}
+                  onClick={() => setCurrentPage('guide-dashboard')}
+                  onMouseEnter={() => setHoveredButton('dashboard')}
+                  onMouseLeave={() => setHoveredButton(null)}
+                >
+                  📊 Dashboard
+                </button>
+              )}
+
               <button
                 style={{
                   ...styles.profileButton,
@@ -97,9 +112,9 @@ const Navbar = () => {
               >
                 Logout
               </button>
-            </>
+            </React.Fragment>
           ) : (
-            <>
+            <React.Fragment>
               <button
                 style={{
                   ...styles.loginButton,
@@ -127,7 +142,7 @@ const Navbar = () => {
               >
                 Sign Up
               </button>
-            </>
+            </React.Fragment>
           )}
         </div>
       </div>
@@ -182,6 +197,17 @@ const styles = {
     display: 'flex',
     gap: '12px',
     alignItems: 'center',
+  },
+  dashboardButton: {
+    background: 'transparent',
+    border: `2px solid ${COLORS.secondary}`,
+    color: COLORS.secondary,
+    padding: '8px 16px',
+    borderRadius: '8px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.3s',
+    fontSize: '14px',
   },
   loginButton: {
     background: 'transparent',

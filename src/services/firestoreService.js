@@ -1,13 +1,4 @@
-import { initializeApp } from 'firebase/app';
 import { 
-    getAuth, 
-    signInAnonymously, 
-    signInWithCustomToken, 
-    setPersistence,
-    browserSessionPersistence
-} from 'firebase/auth';
-import { 
-    getFirestore, 
     collection, 
     doc, 
     getDoc, 
@@ -18,69 +9,9 @@ import {
     where, 
     orderBy, 
     serverTimestamp, 
-    runTransaction, 
-    addDoc, 
+    addDoc,
 } from 'firebase/firestore';
-import { setLogLevel } from 'firebase/firestore';
-
-// --- FIREBASE INITIALIZATION & AUTHENTICATION ---
-
-// Global variables provided by the Canvas environment
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-// Check for undefined and parse config JSON
-let firebaseConfig = {};
-if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-    try {
-        firebaseConfig = JSON.parse(__firebase_config);
-    } catch (e) {
-        console.error("Error parsing __firebase_config:", e);
-    }
-}
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-// Initialize Firebase App and Services
-let app;
-let db;
-let auth;
-
-try {
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    auth = getAuth(app);
-    setLogLevel('error'); // Use 'debug' to see detailed logs in the console
-
-    // Set persistence to session storage
-    setPersistence(auth, browserSessionPersistence);
-
-    // Initial sign-in logic
-    const signIn = async () => {
-        if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-        } else {
-            await signInAnonymously(auth);
-        }
-        console.log("Firebase Auth Initialized. User:", auth.currentUser?.uid || 'Anonymous');
-    };
-    
-    // Ensure sign-in runs only once upon service loading
-    signIn();
-
-} catch (e) {
-    console.error("Failed to initialize Firebase:", e);
-}
-
-/**
- * Helper function to get the correct public collection reference, 
- * respecting multi-tenant security rules.
- * Path: /artifacts/{appId}/public/data/{collectionName}
- * @param {string} collectionName The name of the collection (e.g., 'tours', 'guides').
- * @returns {import('firebase/firestore').CollectionReference}
- */
-const getPublicCollectionRef = (collectionName) => {
-    if (!db) throw new Error("Firestore not initialized.");
-    return collection(db, 'artifacts', appId, 'public', 'data', collectionName);
-};
-
+import { db } from '../firebase.js';
 
 // ============================================
 // TOURS SERVICE
@@ -90,7 +21,7 @@ export const tourService = {
     // Create a new tour (Guide only)
     createTour: async (guideId, tourData) => {
         try {
-            const toursRef = getPublicCollectionRef('tours');
+            const toursRef = collection(db, 'tours');
             const docRef = await addDoc(toursRef, {
                 ...tourData,
                 guideId,
@@ -101,6 +32,7 @@ export const tourService = {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
+            console.log('Tour created successfully:', docRef.id);
             return { success: true, tourId: docRef.id };
         } catch (error) {
             console.error('Error creating tour:', error);
@@ -112,11 +44,10 @@ export const tourService = {
     getGuideTours: async (guideId) => {
         try {
             const q = query(
-                getPublicCollectionRef('tours'),
+                collection(db, 'tours'),
                 where('guideId', '==', guideId),
                 where('isActive', '==', true),
-                // NOTE: Using orderBy here might require Firestore index creation
-                orderBy('createdAt', 'desc') 
+                orderBy('createdAt', 'desc')
             );
             const querySnapshot = await getDocs(q);
             return querySnapshot.docs.map(d => ({ tourId: d.id, ...d.data() }));
@@ -129,7 +60,7 @@ export const tourService = {
     // Get single tour by ID
     getTourById: async (tourId) => {
         try {
-            const tourRef = doc(getPublicCollectionRef('tours'), tourId);
+            const tourRef = doc(db, 'tours', tourId);
             const docSnap = await getDoc(tourRef);
             if (docSnap.exists()) {
                 return { tourId: docSnap.id, ...docSnap.data() };
@@ -144,8 +75,7 @@ export const tourService = {
     // Get all tours (for travelers browsing) with optional filters
     getAllTours: async (filters = {}) => {
         try {
-            // Start with base constraints
-            const constraints = [where('isActive', '==', true)];
+            let constraints = [where('isActive', '==', true)];
 
             if (filters.category) {
                 constraints.push(where('category', '==', filters.category));
@@ -155,27 +85,18 @@ export const tourService = {
                 constraints.push(where('price', '<=', filters.maxPrice));
             }
 
-            // Build query. NOTE: orderBy must be used carefully with filters to avoid index issues.
-            let q;
-            if (constraints.length > 0) {
-                // Removed orderBy('createdAt', 'desc') to avoid complex composite index requirement.
-                q = query(getPublicCollectionRef('tours'), ...constraints);
-            } else {
-                q = query(getPublicCollectionRef('tours'));
-            }
-
+            const q = query(collection(db, 'tours'), ...constraints);
             const querySnapshot = await getDocs(q);
             let tours = querySnapshot.docs.map(d => ({ tourId: d.id, ...d.data() }));
             
-            // Client-side sorting by creation time (desc) since we removed the Firestore orderBy
+            // Client-side sorting
             tours.sort((a, b) => {
                 const aTime = a.createdAt?.seconds || 0;
                 const bTime = b.createdAt?.seconds || 0;
                 return bTime - aTime;
             });
 
-
-            // Client-side filter for location (MVP)
+            // Client-side filter for location
             if (filters.location) {
                 const locationTerm = filters.location.toLowerCase();
                 tours = tours.filter(t => (t.location || '').toLowerCase().includes(locationTerm));
@@ -188,10 +109,9 @@ export const tourService = {
         }
     },
 
-    // Search tours by location/title/description (client-side)
+    // Search tours
     searchTours: async (searchTerm) => {
         try {
-            // Re-use getAllTours without filters
             const tours = await tourService.getAllTours({});
             if (!searchTerm) return tours;
             const term = searchTerm.toLowerCase();
@@ -210,7 +130,7 @@ export const tourService = {
     // Update tour
     updateTour: async (tourId, updateData) => {
         try {
-            const tourRef = doc(getPublicCollectionRef('tours'), tourId);
+            const tourRef = doc(db, 'tours', tourId);
             await updateDoc(tourRef, {
                 ...updateData,
                 updatedAt: serverTimestamp(),
@@ -225,7 +145,7 @@ export const tourService = {
     // Delete tour (soft delete)
     deleteTour: async (tourId) => {
         try {
-            const tourRef = doc(getPublicCollectionRef('tours'), tourId);
+            const tourRef = doc(db, 'tours', tourId);
             await updateDoc(tourRef, {
                 isActive: false,
                 updatedAt: serverTimestamp(),
@@ -243,91 +163,55 @@ export const tourService = {
 // ============================================
 
 export const bookingService = {
-    // Create a new booking (transactional to prevent overbooking)
     createBooking: async (bookingData) => {
         try {
-            return await runTransaction(db, async (transaction) => {
-                const tourRef = doc(getPublicCollectionRef('tours'), bookingData.tourId);
-                const tourSnap = await transaction.get(tourRef);
+            const bookingsRef = collection(db, 'bookings');
+            const tourRef = doc(db, 'tours', bookingData.tourId);
+            
+            const tourSnap = await getDoc(tourRef);
+            if (!tourSnap.exists()) {
+                throw new Error('Tour not found');
+            }
 
-                if (!tourSnap.exists()) {
-                    throw new Error('Tour not found');
-                }
+            const tourData = tourSnap.data();
+            if (!tourData.isActive) {
+                throw new Error('Tour is no longer available');
+            }
 
-                const tourData = tourSnap.data();
+            const newBooking = {
+                ...bookingData,
+                ticketNumber: `TKT-${Date.now()}`,
+                status: 'pending',
+                paymentStatus: 'pending',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            };
 
-                // Check if tour is still available
-                if (!tourData.isActive) {
-                    throw new Error('Tour is no longer available');
-                }
+            const bookingDocRef = await addDoc(bookingsRef, newBooking);
 
-                // Prepare bookings query for the same startDate
-                const bookingsRef = getPublicCollectionRef('bookings');
-                const bookingsQuery = query(
-                    bookingsRef,
-                    where('tourId', '==', bookingData.tourId),
-                    where('startDate', '==', bookingData.startDate),
-                    where('status', 'in', ['confirmed', 'pending'])
-                );
-
-                // Use getDocs outside the transaction if the query path is not secured by transaction
-                const existingBookingsSnap = await getDocs(bookingsQuery);
-                const totalParticipants = existingBookingsSnap.docs.reduce(
-                    (sum, d) => sum + (d.data().numberOfParticipants || 0),
-                    0
-                );
-
-                const requested = bookingData.numberOfParticipants || 1;
-                const maxParticipants = tourData.maxParticipants || Infinity;
-
-                if (totalParticipants + requested > maxParticipants) {
-                    throw new Error('Not enough spots available for this date');
-                }
-
-                // Create booking document
-                const bookingsCollection = getPublicCollectionRef('bookings');
-                const newBooking = {
-                    ...bookingData,
-                    ticketNumber: `TKT-${Date.now()}`,
-                    status: 'pending',
-                    paymentStatus: 'pending',
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                };
-
-                // NOTE: addDoc cannot be part of a transaction. We rely on the tour update for atomic checks.
-                const bookingDocRef = await addDoc(bookingsCollection, newBooking);
-
-                // Update tour booking count inside transaction
-                transaction.update(tourRef, {
-                    bookings: (tourData.bookings || 0) + requested,
-                    updatedAt: serverTimestamp(),
-                });
-
-                return {
-                    success: true,
-                    bookingId: bookingDocRef.id,
-                    ticketNumber: newBooking.ticketNumber,
-                };
+            await updateDoc(tourRef, {
+                bookings: (tourData.bookings || 0) + (bookingData.numberOfParticipants || 1),
+                updatedAt: serverTimestamp(),
             });
+
+            return {
+                success: true,
+                bookingId: bookingDocRef.id,
+                ticketNumber: newBooking.ticketNumber,
+            };
         } catch (error) {
             console.error('Error creating booking:', error);
             throw error;
         }
     },
 
-    // Get user's bookings
     getUserBookings: async (userId, role = 'traveler') => {
         try {
-            const bookingsRef = getPublicCollectionRef('bookings');
-            // Assuming guideId and travelerId are stored in bookings
             const field = role === 'guide' ? 'guideId' : 'travelerId';
-
             const q = query(
-                bookingsRef,
+                collection(db, 'bookings'),
                 where(field, '==', userId),
-                // NOTE: Using orderBy here might require Firestore index creation
-                orderBy('startDate', 'desc') 
+                orderBy('startDate', 'desc')
             );
 
             const querySnapshot = await getDocs(q);
@@ -338,10 +222,9 @@ export const bookingService = {
         }
     },
 
-    // Get single booking
     getBookingById: async (bookingId) => {
         try {
-            const bookingRef = doc(getPublicCollectionRef('bookings'), bookingId);
+            const bookingRef = doc(db, 'bookings', bookingId);
             const docSnap = await getDoc(bookingRef);
             if (docSnap.exists()) {
                 return { bookingId: docSnap.id, ...docSnap.data() };
@@ -353,10 +236,9 @@ export const bookingService = {
         }
     },
 
-    // Update booking status
     updateBookingStatus: async (bookingId, status) => {
         try {
-            const bookingRef = doc(getPublicCollectionRef('bookings'), bookingId);
+            const bookingRef = doc(db, 'bookings', bookingId);
             await updateDoc(bookingRef, {
                 status,
                 updatedAt: serverTimestamp(),
@@ -369,10 +251,9 @@ export const bookingService = {
         }
     },
 
-    // Cancel booking
     cancelBooking: async (bookingId) => {
         try {
-            const bookingRef = doc(getPublicCollectionRef('bookings'), bookingId);
+            const bookingRef = doc(db, 'bookings', bookingId);
             await updateDoc(bookingRef, {
                 status: 'cancelled',
                 updatedAt: serverTimestamp(),
@@ -390,20 +271,21 @@ export const bookingService = {
 // ============================================
 
 export const guideService = {
-    // Create/Update guide profile
     createGuideProfile: async (userId, profileData) => {
         try {
-            const guideRef = doc(getPublicCollectionRef('guides'), userId);
+            const guideRef = doc(db, 'guides', userId);
             await setDoc(guideRef, {
                 ...profileData,
                 userId,
                 rating: 0,
                 reviewCount: 0,
+                tourCount: 0,
                 toursCompleted: 0,
                 isVerified: false,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
+            console.log('Guide profile created successfully for:', userId);
             return { success: true };
         } catch (error) {
             console.error('Error creating guide profile:', error);
@@ -411,10 +293,9 @@ export const guideService = {
         }
     },
 
-    // Get guide profile
     getGuideProfile: async (guideId) => {
         try {
-            const guideRef = doc(getPublicCollectionRef('guides'), guideId);
+            const guideRef = doc(db, 'guides', guideId);
             const docSnap = await getDoc(guideRef);
             if (docSnap.exists()) {
                 return { guideId: docSnap.id, ...docSnap.data() };
@@ -426,20 +307,17 @@ export const guideService = {
         }
     },
 
-    // Get all guides (with optional filtering)
     getAllGuides: async (filters = {}) => {
         try {
-            let q = query(
-                getPublicCollectionRef('guides'),
+            const q = query(
+                collection(db, 'guides'),
                 where('isVerified', '==', true),
-                // NOTE: Using orderBy here might require Firestore index creation
-                orderBy('rating', 'desc') 
+                orderBy('rating', 'desc')
             );
 
             const querySnapshot = await getDocs(q);
             let guides = querySnapshot.docs.map(d => ({ guideId: d.id, ...d.data() }));
 
-            // Client-side filtering for location/language
             if (filters.location) {
                 const loc = filters.location.toLowerCase();
                 guides = guides.filter(g => (g.location || '').toLowerCase().includes(loc));
@@ -459,10 +337,9 @@ export const guideService = {
         }
     },
 
-    // Update guide profile
     updateGuideProfile: async (guideId, updateData) => {
         try {
-            const guideRef = doc(getPublicCollectionRef('guides'), guideId);
+            const guideRef = doc(db, 'guides', guideId);
             await updateDoc(guideRef, {
                 ...updateData,
                 updatedAt: serverTimestamp(),
@@ -474,7 +351,6 @@ export const guideService = {
         }
     },
 
-    // Search guides (client-side)
     searchGuides: async (searchTerm) => {
         try {
             const guides = await guideService.getAllGuides();
@@ -482,8 +358,10 @@ export const guideService = {
             const term = searchTerm.toLowerCase();
             return guides.filter(
                 guide =>
+                    (guide.fullName || '').toLowerCase().includes(term) ||
                     (guide.location || '').toLowerCase().includes(term) ||
-                    (guide.bio || '').toLowerCase().includes(term)
+                    (guide.bio || '').toLowerCase().includes(term) ||
+                    (guide.languages || []).some(l => l.toLowerCase().includes(term))
             );
         } catch (error) {
             console.error('Error searching guides:', error);
@@ -497,10 +375,9 @@ export const guideService = {
 // ============================================
 
 export const reviewService = {
-    // Create review
     createReview: async (bookingId, reviewData) => {
         try {
-            const reviewsRef = getPublicCollectionRef('reviews');
+            const reviewsRef = collection(db, 'reviews');
             const docRef = await addDoc(reviewsRef, {
                 ...reviewData,
                 bookingId,
@@ -508,10 +385,13 @@ export const reviewService = {
                 updatedAt: serverTimestamp(),
             });
 
-            // Update guide rating (recalculate)
             const booking = await bookingService.getBookingById(bookingId);
             if (booking && booking.guideId) {
                 await reviewService.updateGuideRating(booking.guideId);
+            }
+
+            if (booking && booking.tourId) {
+                await reviewService.updateTourRating(booking.tourId);
             }
 
             return { success: true, reviewId: docRef.id };
@@ -521,11 +401,10 @@ export const reviewService = {
         }
     },
 
-    // Get tour reviews
     getTourReviews: async (tourId) => {
         try {
             const q = query(
-                getPublicCollectionRef('reviews'),
+                collection(db, 'reviews'),
                 where('tourId', '==', tourId),
                 orderBy('createdAt', 'desc')
             );
@@ -537,11 +416,10 @@ export const reviewService = {
         }
     },
 
-    // Get guide reviews
     getGuideReviews: async (guideId) => {
         try {
             const q = query(
-                getPublicCollectionRef('reviews'),
+                collection(db, 'reviews'),
                 where('guideId', '==', guideId),
                 orderBy('createdAt', 'desc')
             );
@@ -553,27 +431,57 @@ export const reviewService = {
         }
     },
 
-    // Update guide rating
     updateGuideRating: async (guideId) => {
         try {
             const reviews = await reviewService.getGuideReviews(guideId);
             if (!reviews || reviews.length === 0) {
-                // Reset rating if no reviews
-                const guideRef = doc(getPublicCollectionRef('guides'), guideId);
-                await updateDoc(guideRef, { rating: 0, reviewCount: 0 });
+                const guideRef = doc(db, 'guides', guideId);
+                await updateDoc(guideRef, { 
+                    rating: 0, 
+                    reviewCount: 0,
+                    updatedAt: serverTimestamp()
+                });
                 return;
             }
 
             const averageRating =
                 reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length;
 
-            const guideRef = doc(getPublicCollectionRef('guides'), guideId);
+            const guideRef = doc(db, 'guides', guideId);
             await updateDoc(guideRef, {
                 rating: Math.round(averageRating * 10) / 10,
                 reviewCount: reviews.length,
+                updatedAt: serverTimestamp()
             });
         } catch (error) {
             console.error('Error updating guide rating:', error);
+        }
+    },
+
+    updateTourRating: async (tourId) => {
+        try {
+            const reviews = await reviewService.getTourReviews(tourId);
+            if (!reviews || reviews.length === 0) {
+                const tourRef = doc(db, 'tours', tourId);
+                await updateDoc(tourRef, { 
+                    averageRating: 0, 
+                    totalReviews: 0,
+                    updatedAt: serverTimestamp()
+                });
+                return;
+            }
+
+            const averageRating =
+                reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length;
+
+            const tourRef = doc(db, 'tours', tourId);
+            await updateDoc(tourRef, {
+                averageRating: Math.round(averageRating * 10) / 10,
+                totalReviews: reviews.length,
+                updatedAt: serverTimestamp()
+            });
+        } catch (error) {
+            console.error('Error updating tour rating:', error);
         }
     },
 };
@@ -583,12 +491,10 @@ export const reviewService = {
 // ============================================
 
 export const messageService = {
-    // Get or create conversation
     getOrCreateConversation: async (userId1, userId2) => {
         try {
-            // Query conversations where userId1 is a participant
             const q = query(
-                getPublicCollectionRef('conversations'),
+                collection(db, 'conversations'),
                 where('participants', 'array-contains', userId1)
             );
             const querySnapshot = await getDocs(q);
@@ -604,10 +510,9 @@ export const messageService = {
 
             if (conversationId) return conversationId;
 
-            // Create new conversation
-            const conversationsRef = getPublicCollectionRef('conversations');
+            const conversationsRef = collection(db, 'conversations');
             const docRef = await addDoc(conversationsRef, {
-                participants: [userId1, userId2].sort(), // Sort to ensure consistent lookup
+                participants: [userId1, userId2].sort(),
                 lastMessage: null,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
@@ -620,10 +525,9 @@ export const messageService = {
         }
     },
 
-    // Send message
     sendMessage: async (conversationId, senderId, receiverId, content) => {
         try {
-            const messagesRef = collection(getPublicCollectionRef('conversations'), conversationId, 'messages');
+            const messagesRef = collection(db, 'conversations', conversationId, 'messages');
             const docRef = await addDoc(messagesRef, {
                 senderId,
                 receiverId,
@@ -632,8 +536,7 @@ export const messageService = {
                 isRead: false,
             });
 
-            // Update conversation last message
-            const conversationRef = doc(getPublicCollectionRef('conversations'), conversationId);
+            const conversationRef = doc(db, 'conversations', conversationId);
             await updateDoc(conversationRef, {
                 lastMessage: content,
                 lastMessageTime: serverTimestamp(),
@@ -647,11 +550,10 @@ export const messageService = {
         }
     },
 
-    // Get messages for conversation
     getMessages: async (conversationId) => {
         try {
             const q = query(
-                collection(getPublicCollectionRef('conversations'), conversationId, 'messages'),
+                collection(db, 'conversations', conversationId, 'messages'),
                 orderBy('timestamp', 'asc')
             );
             const querySnapshot = await getDocs(q);
@@ -662,11 +564,10 @@ export const messageService = {
         }
     },
 
-    // Get user conversations
     getUserConversations: async (userId) => {
         try {
             const q = query(
-                getPublicCollectionRef('conversations'),
+                collection(db, 'conversations'),
                 where('participants', 'array-contains', userId),
                 orderBy('updatedAt', 'desc')
             );
@@ -684,10 +585,9 @@ export const messageService = {
 // ============================================
 
 export const paymentService = {
-    // Create payment record
     createPayment: async (bookingId, paymentData) => {
         try {
-            const paymentsRef = getPublicCollectionRef('payments');
+            const paymentsRef = collection(db, 'payments');
             const docRef = await addDoc(paymentsRef, {
                 ...paymentData,
                 bookingId,
@@ -702,10 +602,9 @@ export const paymentService = {
         }
     },
 
-    // Update payment status
     updatePaymentStatus: async (paymentId, status) => {
         try {
-            const paymentRef = doc(getPublicCollectionRef('payments'), paymentId);
+            const paymentRef = doc(db, 'payments', paymentId);
             await updateDoc(paymentRef, {
                 status,
                 processedAt: serverTimestamp(),
@@ -718,13 +617,18 @@ export const paymentService = {
         }
     },
 
-    // Get payment by booking
     getPaymentByBooking: async (bookingId) => {
         try {
-            const q = query(getPublicCollectionRef('payments'), where('bookingId', '==', bookingId));
+            const q = query(
+                collection(db, 'payments'), 
+                where('bookingId', '==', bookingId)
+            );
             const querySnapshot = await getDocs(q);
             if (querySnapshot.docs.length > 0) {
-                return { paymentId: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+                return { 
+                    paymentId: querySnapshot.docs[0].id, 
+                    ...querySnapshot.docs[0].data() 
+                };
             }
             return null;
         } catch (error) {
@@ -733,6 +637,3 @@ export const paymentService = {
         }
     },
 };
-
-// Also export auth instance for use in components if needed (e.g., getting current user ID)
-export { auth };
