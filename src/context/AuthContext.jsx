@@ -13,10 +13,6 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
   updateProfile,
-  updateEmail,
-  updatePassword,
-  reauthenticateWithCredential,
-  EmailAuthProvider
 } from 'firebase/auth';
 import { 
   doc, 
@@ -24,16 +20,11 @@ import {
   getDoc, 
   updateDoc,
   serverTimestamp,
-  collection,
-  query,
-  where,
-  getDocs
 } from 'firebase/firestore';
 import { 
   ref, 
   uploadBytes, 
   getDownloadURL,
-  deleteObject 
 } from 'firebase/storage';
 
 const AuthContext = createContext();
@@ -51,15 +42,10 @@ export const AuthProvider = ({ children }) => {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
-
-  // NEW: page state
   const [currentPage, setCurrentPage] = useState('home');
 
-  // Helper: clear error
   const clearError = () => setAuthError(null);
-  
 
-  // Enhanced error messages
   const getErrorMessage = (error) => {
     const errorMessages = {
       'auth/email-already-in-use': 'This email is already registered. Please sign in instead.',
@@ -82,12 +68,17 @@ export const AuthProvider = ({ children }) => {
     try {
       setAuthError(null);
       
+      console.log('🚀 Starting registration for:', email);
+      
       // Create auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      console.log('✅ Auth user created:', user.uid);
+
       // Send email verification
       await sendEmailVerification(user);
+      console.log('✅ Verification email sent');
 
       // Determine membership dates
       const now = new Date();
@@ -95,7 +86,7 @@ export const AuthProvider = ({ children }) => {
       const membershipStartDate = now.toISOString();
       const membershipEndDate = new Date(now.setFullYear(now.getFullYear() + 1)).toISOString();
 
-      // Create user profile in Firestore
+      // Create user profile in Firestore (users collection)
       const userDocData = {
         uid: user.uid,
         email: user.email,
@@ -115,15 +106,14 @@ export const AuthProvider = ({ children }) => {
         
         // Membership fields (for guides)
         ...(isGuide && {
-          membershipStatus: 'trial', // trial, active, expired
-          membershipType: 'basic', // basic, premium
+          membershipStatus: 'trial',
+          membershipType: 'basic',
           membershipStartDate,
           membershipEndDate,
           isFirstYearFree: true,
           registrationFeePaid: false,
           featuredListing: false,
           
-          // Guide-specific fields
           certifications: [],
           rating: 0,
           reviewCount: 0,
@@ -140,24 +130,53 @@ export const AuthProvider = ({ children }) => {
       };
 
       await setDoc(doc(db, 'users', user.uid), userDocData);
+      console.log('✅ User document created in users collection');
 
-      // If guide, create membership record
+      // If guide, create additional records
       if (isGuide) {
-        await setDoc(doc(db, 'memberships', user.uid), {
-          userId: user.uid,
-          type: 'basic',
-          status: 'trial',
-          startDate: membershipStartDate,
-          endDate: membershipEndDate,
-          isFirstYearFree: true,
-          privileges: {
-            featuredListing: false,
-            prioritySupport: false,
-            advancedAnalytics: false,
-          },
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+        try {
+          // Create membership record
+          await setDoc(doc(db, 'memberships', user.uid), {
+            userId: user.uid,
+            type: 'basic',
+            status: 'trial',
+            startDate: membershipStartDate,
+            endDate: membershipEndDate,
+            isFirstYearFree: true,
+            privileges: {
+              featuredListing: false,
+              prioritySupport: false,
+              advancedAnalytics: false,
+            },
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          console.log('✅ Membership document created');
+
+          // Create guide profile in guides collection
+          await setDoc(doc(db, 'guides', user.uid), {
+            userId: user.uid,
+            fullName: userData.name,
+            email: user.email,
+            bio: userData.bio || '',
+            location: userData.location || '',
+            languages: userData.languages || [],
+            phone: userData.phone || '',
+            rating: 0,
+            reviewCount: 0,
+            tourCount: 0,
+            toursCompleted: 0,
+            isVerified: true, // Auto-verify new guides
+            certifications: [],
+            profileImageUrl: '',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          console.log('✅ Guide profile created in guides collection');
+        } catch (guideError) {
+          console.error('❌ Error creating guide records:', guideError);
+          // Don't throw error - allow user account creation to succeed
+        }
       }
 
       return { 
@@ -167,6 +186,7 @@ export const AuthProvider = ({ children }) => {
       };
 
     } catch (error) {
+      console.error('❌ Registration error:', error);
       const errorMessage = getErrorMessage(error);
       setAuthError(errorMessage);
       throw new Error(errorMessage);
@@ -203,6 +223,7 @@ export const AuthProvider = ({ children }) => {
       await signOut(auth);
       setCurrentUser(null);
       setUserProfile(null);
+      setCurrentPage('home');
       return { success: true };
     } catch (error) {
       const errorMessage = getErrorMessage(error);
@@ -248,6 +269,19 @@ export const AuthProvider = ({ children }) => {
         });
       }
 
+      // If user is a guide, also update guide profile
+      if (userProfile?.role === 'guide') {
+        const guideRef = doc(db, 'guides', currentUser.uid);
+        await updateDoc(guideRef, {
+          fullName: updates.name || userProfile.name,
+          bio: updates.bio || userProfile.bio,
+          location: updates.location || userProfile.location,
+          languages: updates.languages || userProfile.languages,
+          phone: updates.phone || userProfile.phone,
+          updatedAt: serverTimestamp()
+        });
+      }
+
       // Refresh user profile
       await fetchUserProfile(currentUser.uid);
 
@@ -279,6 +313,14 @@ export const AuthProvider = ({ children }) => {
         profileImageUrl: downloadURL,
         updatedAt: serverTimestamp()
       });
+
+      // If guide, update guide profile too
+      if (userProfile?.role === 'guide') {
+        await updateDoc(doc(db, 'guides', currentUser.uid), {
+          profileImageUrl: downloadURL,
+          updatedAt: serverTimestamp()
+        });
+      }
 
       // Refresh profile
       await fetchUserProfile(currentUser.uid);
@@ -441,7 +483,7 @@ export const AuthProvider = ({ children }) => {
     checkMembershipStatus,
     
     // Clear error
-    clearError: () => setAuthError(null),
+    clearError,
   };
 
   return (

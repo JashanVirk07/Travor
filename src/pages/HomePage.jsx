@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { COLORS } from '../utils/colors';
 import { Icon } from '../components/Icons';
+import SetupButton from '../components/SetupButton';
 
 const HomePage = () => {
   const { setCurrentPage } = useAuth();
@@ -194,6 +195,7 @@ const HomePage = () => {
           </div>
         </div>
       </section>
+      <SetupButton />
     </div>
   );
 };

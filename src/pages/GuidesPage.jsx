@@ -4,27 +4,18 @@ import { COLORS } from '../utils/colors';
 import { Icon } from '../components/Icons';
 
 const GuidesPage = () => {
-  // State for fetching and filtering
   const [allGuides, setAllGuides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // --- Data Fetching Effect ---
   useEffect(() => {
-    // This simple check prevents running if the service object is not yet fully available
-    if (!guideService || !guideService.getAllGuides) {
-        // Log a warning, but don't set loading to false as Firebase might still be initializing
-        console.warn("Guide service not ready. Waiting for Firestore initialization...");
-        return; 
-    }
-
     const fetchGuides = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Fetch all verified guides from Firestore
         const data = await guideService.getAllGuides();
+        console.log('Fetched guides:', data);
         setAllGuides(data);
       } catch (err) {
         console.error('Error fetching guides:', err);
@@ -35,15 +26,12 @@ const GuidesPage = () => {
     };
 
     fetchGuides();
-    
-    // The dependency array is empty, running only on mount.
   }, []);
 
-  // Client-side filtering logic
+  // Client-side filtering
   const filteredGuides = allGuides.filter((guide) => {
     const query = searchQuery.toLowerCase();
     
-    // Search by full name, location, or languages (case-insensitive)
     const matchesName = (guide.fullName || '').toLowerCase().includes(query);
     const matchesLocation = (guide.location || '').toLowerCase().includes(query);
     const matchesLanguage = (guide.languages || []).some(lang => 
@@ -59,8 +47,7 @@ const GuidesPage = () => {
         <h1 style={styles.pageTitle}>Find Your Perfect Guide</h1>
         <p style={styles.pageSubtitle}>Connect with verified local experts</p>
         <div style={styles.searchBar}>
-          {/* Using Icon component for Search */}
-          <Icon.Search style={{fontSize: '20px'}} />
+          <Icon.Search />
           <input
             type="text"
             placeholder="Search by name, location, or language..."
@@ -72,56 +59,52 @@ const GuidesPage = () => {
       </div>
 
       <div style={styles.container}>
-        {/* Loading and Error Indicators */}
         {loading && (
           <div style={styles.messageBox}>
             Loading verified guides...
           </div>
         )}
+        
         {error && (
-          <div style={{...styles.messageBox, color: COLORS.error}}>
-            Error: {error}
+          <div style={{...styles.messageBox, color: COLORS.danger}}>
+            {error}
           </div>
         )}
         
         {!loading && filteredGuides.length === 0 && !error && (
-            <div style={{...styles.messageBox, color: COLORS.gray}}>
-                {searchQuery 
-                    ? `No guides match your search query: "${searchQuery}"`
-                    : "No guides found. Add some guides to the database!"
-                }
-            </div>
+          <div style={styles.messageBox}>
+            {searchQuery 
+              ? `No guides match your search query: "${searchQuery}"`
+              : "No verified guides found yet. Check back soon!"}
+          </div>
         )}
 
-        {/* Guides Grid */}
         <div style={styles.guidesGrid}>
           {filteredGuides.map((guide) => (
             <div key={guide.guideId} style={styles.guideCard}>
-              {/* Using a stable placeholder image with guideId as seed */}
               <img 
-                src={`https://i.pravatar.cc/150?u=${guide.guideId}`} 
+                src={guide.profileImageUrl || `https://i.pravatar.cc/150?u=${guide.guideId}`} 
                 alt={guide.fullName} 
                 style={styles.guideImage}
-                // Fallback for image loading
                 onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = "https://placehold.co/120x120/a8a8a8/ffffff?text=Guide";
+                  e.target.onerror = null;
+                  e.target.src = "https://placehold.co/120x120/007bff/ffffff?text=Guide";
                 }}
               />
               <div style={styles.guideContent}>
                 <h3 style={styles.guideName}>{guide.fullName || 'Unknown Guide'}</h3>
                 <div style={styles.guideLocation}>
-                  <Icon.MapPin style={{color: COLORS.primary, width: '16px', height: '16px'}} />
+                  <Icon.MapPin />
                   <span>{guide.location || 'Global'}</span>
                 </div>
                 <div style={styles.guideRating}>
-                  {/* Using Icon component for Star */}
-                  <Icon.Star filled style={{fontSize: '18px'}} />
-                  {/* Displaying rating and review count from Firebase data structure */}
+                  <Icon.Star filled />
                   <span>{guide.rating ? guide.rating.toFixed(1) : 'New'}</span>
                   <span style={styles.guideReviews}>({guide.reviewCount || 0} reviews)</span>
                 </div>
-                <p style={styles.guideBio}>{guide.bio || 'A dedicated and knowledgeable local expert.'}</p>
+                <p style={styles.guideBio}>
+                  {guide.bio || 'A dedicated and knowledgeable local expert.'}
+                </p>
                 <div style={styles.guideLanguages}>
                   {(guide.languages || []).map((lang) => (
                     <span key={lang} style={styles.languageBadge}>
@@ -140,7 +123,6 @@ const GuidesPage = () => {
   );
 };
 
-// NOTE: Styles remain consistent with your original definitions
 const styles = {
   page: {
     flex: 1,
@@ -189,9 +171,8 @@ const styles = {
   messageBox: {
     textAlign: 'center', 
     padding: '40px', 
-    fontSize: '20px', 
-    fontWeight: '500', 
-    color: COLORS.text
+    fontSize: '18px',
+    color: '#666',
   },
   guidesGrid: {
     display: 'grid',
