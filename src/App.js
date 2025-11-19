@@ -1,6 +1,6 @@
+// src/App.js
 import React from 'react';
-import { BrowserRouter as Router } from 'react-router-dom';
-import { useAuth } from './context/AuthContext.jsx';
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import HomePage from './pages/HomePage.jsx';
@@ -11,17 +11,13 @@ import AboutPage from './pages/AboutPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import GuideDashboardPage from './pages/GuideDashboardPage.jsx';
+import TourDetailsPage from './pages/TourDetailsPage.jsx';
+import GuideProfilePage from './pages/GuideProfilePage.jsx';
+import BookingConfirmationPage from './pages/BookingConfirmationPage.jsx';
+import MessagesPage from './pages/MessagesPage.jsx';
 
-const AppContent = () => {
-  const { currentPage, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <div>Loading...</div>
-      </div>
-    );
-  }
+function AppContent() {
+  const { currentPage } = useAuth();
 
   const renderPage = () => {
     switch (currentPage) {
@@ -31,47 +27,46 @@ const AppContent = () => {
         return <MyProfilePage />;
       case 'destinations':
         return <DestinationsPage />;
+      case 'tour-details':
+        return <TourDetailsPage />;
       case 'guides':
         return <GuidesPage />;
+      case 'guide-profile':
+        return <GuideProfilePage />;
+      case 'guide-dashboard':
+        return <GuideDashboardPage />;
       case 'about':
         return <AboutPage />;
       case 'login':
         return <LoginPage />;
       case 'register':
         return <RegisterPage />;
-      case 'guide-dashboard':
-      return <GuideDashboardPage />;
+      case 'booking-confirmation':
+        return <BookingConfirmationPage />;
+      case 'messages':
+        return <MessagesPage />;
       default:
         return <HomePage />;
     }
   };
 
   return (
-    <div style={styles.app}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Navbar />
-      <main style={styles.main}>{renderPage()}</main>
+      <div style={{ flex: 1 }}>
+        {renderPage()}
+      </div>
       <Footer />
     </div>
   );
-};
+}
 
-const App = () => {
+function App() {
   return (
-    <Router>
+    <AuthProvider>
       <AppContent />
-    </Router>
+    </AuthProvider>
   );
-};
-
-const styles = {
-  app: {
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: '100vh',
-  },
-  main: {
-    flex: 1,
-  },
-};
+}
 
 export default App;

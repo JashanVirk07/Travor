@@ -1,6 +1,6 @@
 // src/components/Navbar.jsx
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext.jsx';
 import { COLORS } from '../utils/colors.js';
 import { Icon } from './Icons.jsx';
 import { signOut } from 'firebase/auth';
@@ -46,16 +46,19 @@ const Navbar = () => {
 
         <ul style={styles.navLinks}>
           {navItems.map((item) => {
+            const isActive = currentPage === item.page;
+            const isHovered = hoveredLink === item.page;
+            
             return (
-              <li key={item.page}>
+              <li key={item.page} style={{ listStyle: 'none' }}>
                 <a
                   onClick={() => setCurrentPage(item.page)}
                   onMouseEnter={() => setHoveredLink(item.page)}
                   onMouseLeave={() => setHoveredLink(null)}
                   style={{
                     ...styles.navLink,
-                    ...(currentPage === item.page ? styles.navLinkActive : {}),
-                    ...(hoveredLink === item.page ? { color: COLORS.primary, transform: 'scale(1.05)' } : {}),
+                    ...(isActive ? styles.navLinkActive : {}),
+                    ...(isHovered ? { color: COLORS.primary, transform: 'scale(1.05)' } : {}),
                   }}
                 >
                   {item.label}
@@ -67,7 +70,21 @@ const Navbar = () => {
 
         <div style={styles.navButtons}>
           {currentUser ? (
-            <React.Fragment>
+            <>
+              <button
+                style={{
+                  ...styles.messagesButton,
+                  ...(hoveredButton === 'messages'
+                    ? { background: COLORS.secondary, color: 'white', transform: 'scale(1.05)' }
+                    : {}),
+                }}
+                onClick={() => setCurrentPage('messages')}
+                onMouseEnter={() => setHoveredButton('messages')}
+                onMouseLeave={() => setHoveredButton(null)}
+              >
+                💬 Messages
+              </button>
+
               {userProfile?.role === 'guide' && (
                 <button
                   style={{
@@ -112,9 +129,9 @@ const Navbar = () => {
               >
                 Logout
               </button>
-            </React.Fragment>
+            </>
           ) : (
-            <React.Fragment>
+            <>
               <button
                 style={{
                   ...styles.loginButton,
@@ -142,7 +159,7 @@ const Navbar = () => {
               >
                 Sign Up
               </button>
-            </React.Fragment>
+            </>
           )}
         </div>
       </div>
@@ -197,6 +214,17 @@ const styles = {
     display: 'flex',
     gap: '12px',
     alignItems: 'center',
+  },
+  messagesButton: {
+    background: 'transparent',
+    border: `2px solid ${COLORS.secondary}`,
+    color: COLORS.secondary,
+    padding: '8px 16px',
+    borderRadius: '8px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.3s',
+    fontSize: '14px',
   },
   dashboardButton: {
     background: 'transparent',
