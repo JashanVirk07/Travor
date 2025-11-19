@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { guideService } from '../services/firestoreService';
 import { COLORS } from '../utils/colors';
 import { Icon } from '../components/Icons';
+import { useAuth } from '../context/AuthContext.jsx'; 
 
 const GuidesPage = () => {
   const [allGuides, setAllGuides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const { setCurrentPage } = useAuth();
 
   useEffect(() => {
     const fetchGuides = async () => {
@@ -113,7 +115,16 @@ const GuidesPage = () => {
                   ))}
                 </div>
                 <div style={styles.guideTours}>{guide.tourCount || 0} tours available</div>
-                <button style={styles.viewGuideButton}>View Profile</button>
+                <button
+                    onClick={() => {
+                     // Store guide ID in sessionStorage
+                      sessionStorage.setItem('selectedGuideId', guide.guideId);
+                      setCurrentPage('guide-profile');
+                  }}
+                  style={styles.viewGuideButton}
+              >                     
+                   View Profile
+                  </button>
               </div>
             </div>
           ))}

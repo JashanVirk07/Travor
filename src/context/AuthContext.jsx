@@ -44,6 +44,12 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
   const [currentPage, setCurrentPage] = useState('home');
 
+  // Enhanced setCurrentPage that can accept data
+  const navigateToPage = (page, data = null) => {
+  setCurrentPage(page);
+  setPageData(data);
+  };
+
   const clearError = () => setAuthError(null);
 
   const getErrorMessage = (error) => {
@@ -456,35 +462,35 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const value = {
-    // State
-    currentUser,
-    userProfile,
-    loading,
-    authError,
-    currentPage,
-    setCurrentPage,
-    
-    // Auth methods
-    register,
-    login,
-    logout,
-    resetPassword,
-    
-    // Profile methods
-    updateUserProfile,
-    uploadProfileImage,
-    uploadVerificationDocuments,
-    fetchUserProfile,
-    
-    // Helper methods
-    isGuide,
-    isTraveler,
-    isAdmin,
-    checkMembershipStatus,
-    
-    // Clear error
-    clearError,
-  };
+  // State
+  currentUser,
+  userProfile,
+  loading,
+  authError,
+  currentPage,
+  setCurrentPage, // Simple version
+  
+  // Auth methods
+  register,
+  login,
+  logout,
+  resetPassword,
+  
+  // Profile methods
+  updateUserProfile,
+  uploadProfileImage,
+  uploadVerificationDocuments,
+  fetchUserProfile,
+  
+  // Helper methods
+  isGuide,
+  isTraveler,
+  isAdmin,
+  checkMembershipStatus,
+  
+  // Clear error
+  clearError,
+};
 
   return (
     <AuthContext.Provider value={value}>

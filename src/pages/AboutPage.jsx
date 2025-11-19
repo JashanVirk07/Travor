@@ -1,3 +1,4 @@
+// src/pages/AboutPage.jsx
 import React, { useState } from 'react';
 import { COLORS } from '../utils/colors';
 import { Icon } from '../components/Icons';

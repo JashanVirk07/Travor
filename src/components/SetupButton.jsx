@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { setupFirestoreData } from '../utils/setupFirestore';
-import { COLORS } from '../utils/colors';
+import { setupFirestoreData } from '../utils/setupFirestore.js';
+import { COLORS } from '../utils/colors.js';
 
 const SetupButton = () => {
   const [loading, setLoading] = useState(false);
@@ -12,6 +12,7 @@ const SetupButton = () => {
         await setupFirestoreData();
         alert('✅ Database setup complete!');
       } catch (error) {
+        console.error('Setup error:', error);
         alert('❌ Error: ' + error.message);
       }
       setLoading(false);
