@@ -7,73 +7,64 @@ import { COLORS } from '../utils/colors';
 const BookingConfirmationPage = () => {
   const { currentUser, userProfile, setCurrentPage } = useAuth();
   const [bookingInfo, setBookingInfo] = useState(null);
-  const [processing, setProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('credit_card');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Get booking info from sessionStorage
-    const pendingBooking = sessionStorage.getItem('pendingBooking');
-    if (pendingBooking) {
-      setBookingInfo(JSON.parse(pendingBooking));
+    const storedBooking = sessionStorage.getItem('pendingBooking');
+    if (storedBooking) {
+      setBookingInfo(JSON.parse(storedBooking));
     } else {
-      // No booking info, redirect to destinations
       setCurrentPage('destinations');
     }
   }, []);
 
   const handleConfirmBooking = async () => {
-    if (!currentUser || !bookingInfo) return;
+    if (!currentUser || !bookingInfo) {
+      alert('Missing booking information');
+      return;
+    }
 
-    setProcessing(true);
-
+    setLoading(true);
     try {
-      const booking = {
+      const bookingData = {
         tourId: bookingInfo.tour.tourId,
-        tourTitle: bookingInfo.tour.title,
-        guideId: bookingInfo.tour.guideId,
         travelerId: currentUser.uid,
-        travelerName: userProfile?.name || currentUser.email,
-        travelerEmail: currentUser.email,
-        
+        guideId: bookingInfo.guide.guideId,
         startDate: bookingInfo.startDate,
         numberOfParticipants: bookingInfo.numberOfParticipants,
         totalPrice: bookingInfo.totalPrice,
-        
         specialRequests: bookingInfo.specialRequests || '',
-        paymentMethod: paymentMethod,
-        
         status: 'pending',
-        paymentStatus: 'pending',
       };
 
-      const result = await bookingService.createBooking(booking);
+      console.log('Creating booking with data:', bookingData);
+      
+      const bookingId = await bookingService.createBooking(bookingData);
+      
+      console.log('Booking created successfully with ID:', bookingId);
 
-      if (result.success) {
-        // Clear pending booking
-        sessionStorage.removeItem('pendingBooking');
-        
-        alert(`✅ Booking confirmed!\n\nYour ticket number: ${result.ticketNumber}\n\nYou will receive a confirmation email shortly.`);
-        
-        // Redirect to my profile
-        setCurrentPage('myprofile');
-      }
+      // Clear pending booking
+      sessionStorage.removeItem('pendingBooking');
+
+      // Show success message
+      alert('Booking confirmed successfully!');
+      
+      // Navigate to profile to see bookings
+      setCurrentPage('myprofile');
     } catch (error) {
-      console.error('Booking error:', error);
-      alert('❌ Failed to create booking: ' + error.message);
+      console.error('Error confirming booking:', error);
+      alert('Failed to confirm booking: ' + error.message);
     }
-
-    setProcessing(false);
+    setLoading(false);
   };
 
   if (!bookingInfo) {
     return (
       <div style={styles.loadingContainer}>
-        <p>Loading booking details...</p>
+        <div style={styles.loader}>Loading...</div>
       </div>
     );
   }
-
-  const { tour, guide, startDate, numberOfParticipants, totalPrice, specialRequests } = bookingInfo;
 
   return (
     <div style={styles.page}>
@@ -83,173 +74,122 @@ const BookingConfirmationPage = () => {
           <p style={styles.subtitle}>Review your booking details before confirming</p>
         </div>
 
-        <div style={styles.contentGrid}>
-          {/* Booking Summary */}
-          <div style={styles.mainContent}>
-            {/* Tour Details */}
-            <div style={styles.section}>
-              <h2 style={styles.sectionTitle}>Tour Details</h2>
-              <div style={styles.tourSummary}>
-                <img 
-                  src={tour.images?.[0] || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400'} 
-                  alt={tour.title}
-                  style={styles.tourImage}
-                />
-                <div style={styles.tourInfo}>
-                  <h3 style={styles.tourTitle}>{tour.title}</h3>
-                  <div style={styles.tourDetail}>📍 {tour.location}</div>
-                  <div style={styles.tourDetail}>⏱️ {tour.duration}</div>
-                  <div style={styles.tourDetail}>🎯 {tour.difficulty} difficulty</div>
+        <div style={styles.content}>
+          {/* Tour Details */}
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Tour Details</h2>
+            <div style={styles.tourCard}>
+              <img
+                src={bookingInfo.tour.images?.[0] || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400'}
+                alt={bookingInfo.tour.title}
+                style={styles.tourImage}
+              />
+              <div style={styles.tourInfo}>
+                <h3 style={styles.tourTitle}>{bookingInfo.tour.title}</h3>
+                <div style={styles.tourDetail}>
+                  <span style={styles.detailIcon}>📍</span>
+                  <span>{bookingInfo.tour.location}</span>
                 </div>
-              </div>
-            </div>
-
-            {/* Guide Info */}
-            {guide && (
-              <div style={styles.section}>
-                <h2 style={styles.sectionTitle}>Your Guide</h2>
-                <div style={styles.guideInfo}>
-                  <div style={styles.guideAvatar}>
-                    {guide.profileImageUrl ? (
-                      <img src={guide.profileImageUrl} alt={guide.fullName} style={styles.guideImage} />
-                    ) : (
-                      <div style={styles.guidePlaceholder}>
-                        {guide.fullName?.charAt(0)}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div style={styles.guideName}>{guide.fullName}</div>
-                    <div style={styles.guideRating}>
-                      ⭐ {guide.rating?.toFixed(1)} ({guide.reviewCount} reviews)
-                    </div>
-                  </div>
+                <div style={styles.tourDetail}>
+                  <span style={styles.detailIcon}>⏱️</span>
+                  <span>{bookingInfo.tour.duration}</span>
                 </div>
-              </div>
-            )}
-
-            {/* Booking Details */}
-            <div style={styles.section}>
-              <h2 style={styles.sectionTitle}>Booking Information</h2>
-              <div style={styles.bookingDetails}>
-                <div style={styles.detailRow}>
-                  <span style={styles.detailLabel}>Date:</span>
-                  <span style={styles.detailValue}>
-                    {new Date(startDate).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </span>
-                </div>
-                <div style={styles.detailRow}>
-                  <span style={styles.detailLabel}>Participants:</span>
-                  <span style={styles.detailValue}>{numberOfParticipants} person(s)</span>
-                </div>
-                <div style={styles.detailRow}>
-                  <span style={styles.detailLabel}>Meeting Point:</span>
-                  <span style={styles.detailValue}>{tour.meetingPoint}</span>
-                </div>
-                {specialRequests && (
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailLabel}>Special Requests:</span>
-                    <span style={styles.detailValue}>{specialRequests}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Payment Method */}
-            <div style={styles.section}>
-              <h2 style={styles.sectionTitle}>Payment Method</h2>
-              <div style={styles.paymentMethods}>
-                <label style={styles.paymentOption}>
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="credit_card"
-                    checked={paymentMethod === 'credit_card'}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    style={styles.radio}
-                  />
-                  <span style={styles.paymentLabel}>💳 Credit Card</span>
-                </label>
-                <label style={styles.paymentOption}>
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="paypal"
-                    checked={paymentMethod === 'paypal'}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    style={styles.radio}
-                  />
-                  <span style={styles.paymentLabel}>💰 PayPal</span>
-                </label>
-                <label style={styles.paymentOption}>
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="pay_at_venue"
-                    checked={paymentMethod === 'pay_at_venue'}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    style={styles.radio}
-                  />
-                  <span style={styles.paymentLabel}>🏪 Pay at Venue</span>
-                </label>
               </div>
             </div>
           </div>
 
-          {/* Price Summary Sidebar */}
-          <div style={styles.sidebar}>
-            <div style={styles.priceCard}>
-              <h3 style={styles.priceTitle}>Price Summary</h3>
-              
-              <div style={styles.priceBreakdown}>
-                <div style={styles.priceRow}>
-                  <span>Tour Price (x{numberOfParticipants})</span>
-                  <span>${tour.price} x {numberOfParticipants}</span>
-                </div>
-                <div style={styles.priceRow}>
-                  <span>Subtotal</span>
-                  <span>${totalPrice}</span>
-                </div>
-                <div style={styles.priceRow}>
-                  <span>Service Fee</span>
-                  <span>$0</span>
-                </div>
+          {/* Booking Details */}
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Booking Information</h2>
+            <div style={styles.detailsCard}>
+              <div style={styles.detailRow}>
+                <span style={styles.detailLabel}>Date:</span>
+                <span style={styles.detailValue}>
+                  {new Date(bookingInfo.startDate).toLocaleDateString()}
+                </span>
               </div>
-
-              <div style={styles.totalRow}>
-                <span style={styles.totalLabel}>Total</span>
-                <span style={styles.totalAmount}>${totalPrice}</span>
+              <div style={styles.detailRow}>
+                <span style={styles.detailLabel}>Participants:</span>
+                <span style={styles.detailValue}>{bookingInfo.numberOfParticipants}</span>
               </div>
+              {bookingInfo.specialRequests && (
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}>Special Requests:</span>
+                  <span style={styles.detailValue}>{bookingInfo.specialRequests}</span>
+                </div>
+              )}
+            </div>
+          </div>
 
-              <button 
-                onClick={handleConfirmBooking}
-                disabled={processing}
-                style={{
-                  ...styles.confirmButton,
-                  ...(processing ? styles.confirmButtonDisabled : {})
-                }}
-              >
-                {processing ? 'Processing...' : 'Confirm Booking'}
-              </button>
-
-              <button 
-                onClick={() => setCurrentPage('tour-details')}
-                style={styles.cancelButton}
-              >
-                Cancel
-              </button>
-
-              <div style={styles.policies}>
-                <div style={styles.policyItem}>✅ Free cancellation up to 24h</div>
-                <div style={styles.policyItem}>✅ Instant confirmation</div>
-                <div style={styles.policyItem}>✅ Reserve now, pay later</div>
+          {/* Guide Details */}
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Your Guide</h2>
+            <div style={styles.guideCard}>
+              <div style={styles.guideAvatar}>
+                {bookingInfo.guide.profileImageUrl ? (
+                  <img
+                    src={bookingInfo.guide.profileImageUrl}
+                    alt={bookingInfo.guide.fullName}
+                    style={styles.guideImage}
+                  />
+                ) : (
+                  <div style={styles.guidePlaceholder}>
+                    {bookingInfo.guide.fullName?.charAt(0)}
+                  </div>
+                )}
+              </div>
+              <div style={styles.guideInfo}>
+                <h3 style={styles.guideName}>{bookingInfo.guide.fullName}</h3>
+                <div style={styles.guideRating}>
+                  ⭐ {bookingInfo.guide.rating?.toFixed(1)} ({bookingInfo.guide.reviewCount} reviews)
+                </div>
               </div>
             </div>
+          </div>
+
+          {/* Price Summary */}
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Price Summary</h2>
+            <div style={styles.priceCard}>
+              <div style={styles.priceRow}>
+                <span>Price per person:</span>
+                <span>${bookingInfo.tour.price}</span>
+              </div>
+              <div style={styles.priceRow}>
+                <span>Number of participants:</span>
+                <span>× {bookingInfo.numberOfParticipants}</span>
+              </div>
+              <div style={styles.priceDivider}></div>
+              <div style={styles.priceTotal}>
+                <span>Total:</span>
+                <span style={styles.totalAmount}>${bookingInfo.totalPrice}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={styles.actions}>
+            <button
+              onClick={() => setCurrentPage('tour-details')}
+              style={styles.backButton}
+              disabled={loading}
+            >
+              Go Back
+            </button>
+            <button
+              onClick={handleConfirmBooking}
+              style={styles.confirmButton}
+              disabled={loading}
+            >
+              {loading ? 'Processing...' : 'Confirm Booking'}
+            </button>
+          </div>
+
+          {/* Info Notice */}
+          <div style={styles.notice}>
+            <p>✅ Free cancellation up to 24 hours before the tour</p>
+            <p>✅ Instant confirmation</p>
+            <p>✅ You'll receive a confirmation email</p>
           </div>
         </div>
       </div>
@@ -261,51 +201,49 @@ const styles = {
   page: {
     minHeight: '100vh',
     background: COLORS.light,
-    padding: '40px 0',
+    paddingTop: '80px',
+    paddingBottom: '60px',
   },
   container: {
-    maxWidth: '1400px',
+    maxWidth: '800px',
     margin: '0 auto',
     padding: '0 24px',
   },
   header: {
-    marginBottom: '40px',
+    textAlign: 'center',
+    marginBottom: '48px',
   },
   title: {
     fontSize: '36px',
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: '8px',
+    color: '#1a1a2e',
+    marginBottom: '12px',
   },
   subtitle: {
     fontSize: '16px',
     color: '#666',
   },
-  contentGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 400px',
-    gap: '40px',
-  },
-  mainContent: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
+  content: {
+    background: 'white',
+    borderRadius: '24px',
+    padding: '40px',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
   },
   section: {
-    background: 'white',
-    padding: '32px',
-    borderRadius: '16px',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+    marginBottom: '32px',
   },
   sectionTitle: {
     fontSize: '20px',
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: '20px',
+    color: '#1a1a2e',
+    marginBottom: '16px',
   },
-  tourSummary: {
+  tourCard: {
     display: 'flex',
     gap: '20px',
+    padding: '20px',
+    background: COLORS.light,
+    borderRadius: '16px',
   },
   tourImage: {
     width: '150px',
@@ -318,34 +256,63 @@ const styles = {
   },
   tourTitle: {
     fontSize: '20px',
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: 'bold',
+    color: '#1a1a2e',
     marginBottom: '12px',
   },
   tourDetail: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
     fontSize: '14px',
     color: '#666',
     marginBottom: '8px',
   },
-  guideInfo: {
+  detailIcon: {
+    fontSize: '16px',
+  },
+  detailsCard: {
+    padding: '20px',
+    background: COLORS.light,
+    borderRadius: '16px',
+  },
+  detailRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '12px 0',
+    borderBottom: `1px solid ${COLORS.border}`,
+  },
+  detailLabel: {
+    fontSize: '14px',
+    color: '#666',
+    fontWeight: '600',
+  },
+  detailValue: {
+    fontSize: '14px',
+    color: '#1a1a2e',
+    fontWeight: '600',
+  },
+  guideCard: {
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
+    padding: '20px',
+    background: COLORS.light,
+    borderRadius: '16px',
   },
   guideAvatar: {
+    flexShrink: 0,
+  },
+  guideImage: {
     width: '60px',
     height: '60px',
     borderRadius: '50%',
-    overflow: 'hidden',
-  },
-  guideImage: {
-    width: '100%',
-    height: '100%',
     objectFit: 'cover',
   },
   guidePlaceholder: {
-    width: '100%',
-    height: '100%',
+    width: '60px',
+    height: '60px',
+    borderRadius: '50%',
     background: COLORS.primary,
     color: 'white',
     display: 'flex',
@@ -354,156 +321,91 @@ const styles = {
     fontSize: '24px',
     fontWeight: 'bold',
   },
+  guideInfo: {
+    flex: 1,
+  },
   guideName: {
     fontSize: '18px',
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: 'bold',
+    color: '#1a1a2e',
     marginBottom: '4px',
   },
   guideRating: {
     fontSize: '14px',
     color: '#666',
   },
-  bookingDetails: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-  },
-  detailRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingBottom: '16px',
-    borderBottom: `1px solid ${COLORS.border}`,
-  },
-  detailLabel: {
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#666',
-  },
-  detailValue: {
-    fontSize: '14px',
-    color: '#333',
-    textAlign: 'right',
-    maxWidth: '60%',
-  },
-  paymentMethods: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-  },
-  paymentOption: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '16px',
-    border: `2px solid ${COLORS.border}`,
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'all 0.3s',
-  },
-  radio: {
-    width: '20px',
-    height: '20px',
-    cursor: 'pointer',
-  },
-  paymentLabel: {
-    fontSize: '16px',
-    color: '#333',
-    fontWeight: '500',
-  },
-  sidebar: {
-    position: 'sticky',
-    top: '100px',
-    height: 'fit-content',
-  },
   priceCard: {
-    background: 'white',
-    padding: '32px',
+    padding: '20px',
+    background: COLORS.light,
     borderRadius: '16px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-  },
-  priceTitle: {
-    fontSize: '20px',
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: '20px',
-  },
-  priceBreakdown: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    marginBottom: '20px',
-    paddingBottom: '20px',
-    borderBottom: `2px solid ${COLORS.border}`,
   },
   priceRow: {
     display: 'flex',
     justifyContent: 'space-between',
+    padding: '8px 0',
     fontSize: '14px',
     color: '#666',
   },
-  totalRow: {
+  priceDivider: {
+    height: '1px',
+    background: COLORS.border,
+    margin: '16px 0',
+  },
+  priceTotal: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '20px 0',
-    borderBottom: `2px solid ${COLORS.border}`,
-    marginBottom: '24px',
-  },
-  totalLabel: {
     fontSize: '20px',
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a1a2e',
   },
   totalAmount: {
-    fontSize: '32px',
-    fontWeight: 'bold',
     color: COLORS.primary,
+    fontSize: '28px',
+  },
+  actions: {
+    display: 'flex',
+    gap: '16px',
+    marginTop: '32px',
+  },
+  backButton: {
+    flex: 1,
+    padding: '16px',
+    background: 'white',
+    color: COLORS.primary,
+    border: `2px solid ${COLORS.primary}`,
+    borderRadius: '12px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
   },
   confirmButton: {
-    width: '100%',
+    flex: 2,
     padding: '16px',
     background: COLORS.primary,
     color: 'white',
     border: 'none',
-    borderRadius: '8px',
-    fontSize: '18px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    marginBottom: '12px',
-    transition: 'all 0.3s',
-  },
-  confirmButtonDisabled: {
-    background: '#ccc',
-    cursor: 'not-allowed',
-  },
-  cancelButton: {
-    width: '100%',
-    padding: '12px',
-    background: 'transparent',
-    border: `2px solid ${COLORS.border}`,
-    color: '#666',
-    borderRadius: '8px',
+    borderRadius: '12px',
     fontSize: '16px',
     fontWeight: '600',
     cursor: 'pointer',
-    marginBottom: '24px',
   },
-  policies: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  policyItem: {
+  notice: {
+    marginTop: '32px',
+    padding: '20px',
+    background: '#f0fdf4',
+    borderRadius: '12px',
     fontSize: '14px',
-    color: '#666',
+    color: '#166534',
   },
   loadingContainer: {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: '100vh',
+  },
+  loader: {
+    fontSize: '18px',
+    color: '#666',
   },
 };
 

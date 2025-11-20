@@ -1,35 +1,33 @@
 // src/pages/MessagesPage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { messageService, guideService } from '../services/firestoreService';
 import { COLORS } from '../utils/colors';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const MessagesPage = () => {
-  const { currentUser, userProfile, setCurrentPage } = useAuth();
+  const { currentUser, userProfile } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    if (!currentUser) {
-      setCurrentPage('login');
-      return;
+    if (currentUser) {
+      loadConversations();
+      
+      // Check if coming from "Contact Guide" button
+      const chatInfo = sessionStorage.getItem('chatWithGuide');
+      if (chatInfo) {
+        const { guideId, guideName } = JSON.parse(chatInfo);
+        startConversationWithGuide(guideId, guideName);
+        sessionStorage.removeItem('chatWithGuide');
+      }
     }
-
-    // Check if coming from "Contact Guide" button
-    const chatWithGuide = sessionStorage.getItem('chatWithGuide');
-    if (chatWithGuide) {
-      const guideInfo = JSON.parse(chatWithGuide);
-      startConversationWithGuide(guideInfo);
-      sessionStorage.removeItem('chatWithGuide');
-    }
-
-    loadConversations();
   }, [currentUser]);
 
   useEffect(() => {
@@ -38,49 +36,64 @@ const MessagesPage = () => {
     }
   }, [selectedConversation]);
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const loadConversations = async () => {
     setLoading(true);
     try {
       const convos = await messageService.getUserConversations(currentUser.uid);
       
-      // Enrich conversations with other participant info
-      const enrichedConvos = await Promise.all(
+      // Load participant details for each conversation
+      const convosWithDetails = await Promise.all(
         convos.map(async (convo) => {
           const otherUserId = convo.participants.find(id => id !== currentUser.uid);
-          if (otherUserId) {
-            const otherUserProfile = await guideService.getGuideProfile(otherUserId);
-            return {
-              ...convo,
-              otherUser: otherUserProfile || { fullName: 'User', guideId: otherUserId }
-            };
+          try {
+            // Try to get guide profile first
+            let otherUser = await guideService.getGuideProfile(otherUserId);
+            
+            // If not a guide, it's a traveler (you can add a traveler service if needed)
+            if (!otherUser) {
+              otherUser = { 
+                guideId: otherUserId, 
+                fullName: 'User',
+                profileImageUrl: null 
+              };
+            }
+            
+            return { ...convo, otherUser };
+          } catch (error) {
+            console.error('Error loading user details:', error);
+            return { ...convo, otherUser: { fullName: 'User', profileImageUrl: null } };
           }
-          return convo;
         })
       );
-
-      setConversations(enrichedConvos);
+      
+      setConversations(convosWithDetails);
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
     setLoading(false);
   };
 
-  const startConversationWithGuide = async (guideInfo) => {
+  const startConversationWithGuide = async (guideId, guideName) => {
     try {
       const conversationId = await messageService.getOrCreateConversation(
         currentUser.uid,
-        guideInfo.guideId
+        guideId
       );
-
-      // Load guide profile
-      const guideProfile = await guideService.getGuideProfile(guideInfo.guideId);
-
+      
+      const guide = await guideService.getGuideProfile(guideId);
+      
       setSelectedConversation({
         conversationId,
-        otherUser: guideProfile || { fullName: guideInfo.guideName, guideId: guideInfo.guideId }
+        otherUser: guide || { fullName: guideName, profileImageUrl: null },
       });
-
-      loadConversations();
     } catch (error) {
       console.error('Error starting conversation:', error);
     }
@@ -91,24 +104,16 @@ const MessagesPage = () => {
       // Set up real-time listener for messages
       const messagesRef = collection(db, 'conversations', conversationId, 'messages');
       const q = query(messagesRef, orderBy('timestamp', 'asc'));
-
+      
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const msgs = snapshot.docs.map(doc => ({
           messageId: doc.id,
           ...doc.data(),
-          timestamp: doc.data().timestamp?.toDate()
         }));
         setMessages(msgs);
-        
-        // Scroll to bottom
-        setTimeout(() => {
-          const messagesContainer = document.getElementById('messages-container');
-          if (messagesContainer) {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          }
-        }, 100);
       });
 
+      // Return cleanup function
       return unsubscribe;
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -117,14 +122,17 @@ const MessagesPage = () => {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || sending) return;
+    
+    if (!newMessage.trim() || !selectedConversation) return;
 
     setSending(true);
     try {
+      const otherUserId = selectedConversation.otherUser.guideId || selectedConversation.otherUser.userId;
+      
       await messageService.sendMessage(
         selectedConversation.conversationId,
         currentUser.uid,
-        selectedConversation.otherUser.guideId || selectedConversation.otherUser.userId,
+        otherUserId,
         newMessage.trim()
       );
 
@@ -136,15 +144,35 @@ const MessagesPage = () => {
     setSending(false);
   };
 
-  const handleSelectConversation = (convo) => {
-    setSelectedConversation(convo);
-    setMessages([]);
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const now = new Date();
+    const diffInHours = (now - date) / (1000 * 60 * 60);
+
+    if (diffInHours < 24) {
+      return date.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    } else if (diffInHours < 48) {
+      return 'Yesterday';
+    } else {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    }
   };
 
   if (!currentUser) {
     return (
-      <div style={styles.loadingContainer}>
-        <p>Please login to access messages</p>
+      <div style={styles.container}>
+        <div style={styles.errorState}>
+          <h2>Please Login</h2>
+          <p>You need to be logged in to view messages</p>
+        </div>
       </div>
     );
   }
@@ -152,60 +180,64 @@ const MessagesPage = () => {
   return (
     <div style={styles.page}>
       <div style={styles.container}>
-        <div style={styles.header}>
-          <h1 style={styles.title}>Messages</h1>
-        </div>
-
-        <div style={styles.messagesLayout}>
+        <div style={styles.messagesContainer}>
           {/* Conversations List */}
           <div style={styles.conversationsList}>
-            <h2 style={styles.conversationsTitle}>Conversations</h2>
+            <div style={styles.conversationsHeader}>
+              <h2 style={styles.conversationsTitle}>Messages</h2>
+            </div>
+
             {loading ? (
-              <p style={styles.loadingText}>Loading...</p>
+              <div style={styles.loadingState}>
+                <div style={styles.loader}>Loading conversations...</div>
+              </div>
             ) : conversations.length === 0 ? (
-              <div style={styles.emptyState}>
+              <div style={styles.emptyConversations}>
+                <div style={styles.emptyIcon}>💬</div>
                 <p style={styles.emptyText}>No conversations yet</p>
-                <button 
-                  onClick={() => setCurrentPage('guides')}
-                  style={styles.browseButton}
-                >
-                  Find Guides
-                </button>
+                <p style={styles.emptySubtext}>
+                  Start a conversation by contacting a guide from a tour page
+                </p>
               </div>
             ) : (
-              <div style={styles.conversationItems}>
+              <div style={styles.conversationsContent}>
                 {conversations.map((convo) => (
                   <div
                     key={convo.conversationId}
-                    onClick={() => handleSelectConversation(convo)}
                     style={{
                       ...styles.conversationItem,
-                      ...(selectedConversation?.conversationId === convo.conversationId 
-                        ? styles.conversationItemActive 
-                        : {})
+                      ...(selectedConversation?.conversationId === convo.conversationId
+                        ? styles.conversationItemActive
+                        : {}),
                     }}
+                    onClick={() => setSelectedConversation(convo)}
                   >
                     <div style={styles.conversationAvatar}>
-                      {convo.otherUser?.profileImageUrl ? (
-                        <img 
-                          src={convo.otherUser.profileImageUrl} 
+                      {convo.otherUser.profileImageUrl ? (
+                        <img
+                          src={convo.otherUser.profileImageUrl}
                           alt={convo.otherUser.fullName}
                           style={styles.avatarImage}
                         />
                       ) : (
                         <div style={styles.avatarPlaceholder}>
-                          {convo.otherUser?.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                          {convo.otherUser.fullName?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
                       )}
                     </div>
                     <div style={styles.conversationInfo}>
                       <div style={styles.conversationName}>
-                        {convo.otherUser?.fullName || 'User'}
+                        {convo.otherUser.fullName || 'User'}
                       </div>
                       <div style={styles.conversationLastMessage}>
                         {convo.lastMessage || 'No messages yet'}
                       </div>
                     </div>
+                    {convo.lastMessageTime && (
+                      <div style={styles.conversationTime}>
+                        {formatTime(convo.lastMessageTime)}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -214,107 +246,101 @@ const MessagesPage = () => {
 
           {/* Messages Area */}
           <div style={styles.messagesArea}>
-            {!selectedConversation ? (
-              <div style={styles.noConversationSelected}>
-                <div style={styles.noConversationIcon}>💬</div>
-                <p style={styles.noConversationText}>Select a conversation to start messaging</p>
-              </div>
-            ) : (
+            {selectedConversation ? (
               <>
                 {/* Chat Header */}
                 <div style={styles.chatHeader}>
                   <div style={styles.chatHeaderInfo}>
                     <div style={styles.chatAvatar}>
-                      {selectedConversation.otherUser?.profileImageUrl ? (
-                        <img 
-                          src={selectedConversation.otherUser.profileImageUrl} 
+                      {selectedConversation.otherUser.profileImageUrl ? (
+                        <img
+                          src={selectedConversation.otherUser.profileImageUrl}
                           alt={selectedConversation.otherUser.fullName}
                           style={styles.avatarImage}
                         />
                       ) : (
                         <div style={styles.avatarPlaceholder}>
-                          {selectedConversation.otherUser?.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                          {selectedConversation.otherUser.fullName?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
                       )}
                     </div>
                     <div>
                       <div style={styles.chatHeaderName}>
-                        {selectedConversation.otherUser?.fullName || 'User'}
+                        {selectedConversation.otherUser.fullName || 'User'}
                       </div>
                       <div style={styles.chatHeaderStatus}>
-                        {selectedConversation.otherUser?.location || 'Guide'}
+                        {userProfile?.role === 'guide' ? 'Traveler' : 'Guide'}
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      sessionStorage.setItem('selectedGuideId', selectedConversation.otherUser.guideId);
-                      setCurrentPage('guide-profile');
-                    }}
-                    style={styles.viewProfileBtn}
-                  >
-                    View Profile
-                  </button>
                 </div>
 
-                {/* Messages Container */}
-                <div id="messages-container" style={styles.messagesContainer}>
+                {/* Messages */}
+                <div style={styles.messagesContent}>
                   {messages.length === 0 ? (
-                    <div style={styles.noMessages}>
-                      <p>No messages yet. Start the conversation!</p>
+                    <div style={styles.emptyMessages}>
+                      <div style={styles.emptyIcon}>💬</div>
+                      <p style={styles.emptyText}>No messages yet</p>
+                      <p style={styles.emptySubtext}>Start the conversation!</p>
                     </div>
                   ) : (
-                    messages.map((message) => (
-                      <div
-                        key={message.messageId}
-                        style={{
-                          ...styles.messageWrapper,
-                          justifyContent: message.senderId === currentUser.uid ? 'flex-end' : 'flex-start'
-                        }}
-                      >
-                        <div
-                          style={{
-                            ...styles.messageBubble,
-                            ...(message.senderId === currentUser.uid 
-                              ? styles.messageBubbleSent 
-                              : styles.messageBubbleReceived)
-                          }}
-                        >
-                          <div style={styles.messageContent}>{message.content}</div>
-                          <div style={styles.messageTime}>
-                            {message.timestamp?.toLocaleTimeString([], { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            })}
+                    <div style={styles.messagesList}>
+                      {messages.map((message) => {
+                        const isOwn = message.senderId === currentUser.uid;
+                        return (
+                          <div
+                            key={message.messageId}
+                            style={{
+                              ...styles.messageItem,
+                              ...(isOwn ? styles.messageItemOwn : styles.messageItemOther),
+                            }}
+                          >
+                            <div
+                              style={{
+                                ...styles.messageBubble,
+                                ...(isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther),
+                              }}
+                            >
+                              <div style={styles.messageText}>{message.content}</div>
+                              <div style={styles.messageTime}>
+                                {formatTime(message.timestamp)}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    ))
+                        );
+                      })}
+                      <div ref={messagesEndRef} />
+                    </div>
                   )}
                 </div>
 
                 {/* Message Input */}
-                <form onSubmit={handleSendMessage} style={styles.messageForm}>
+                <form onSubmit={handleSendMessage} style={styles.messageInput}>
                   <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your message..."
-                    style={styles.messageInput}
+                    placeholder="Type a message..."
+                    style={styles.input}
                     disabled={sending}
                   />
-                  <button 
-                    type="submit" 
-                    disabled={!newMessage.trim() || sending}
-                    style={{
-                      ...styles.sendButton,
-                      ...((!newMessage.trim() || sending) ? styles.sendButtonDisabled : {})
-                    }}
+                  <button
+                    type="submit"
+                    style={styles.sendButton}
+                    disabled={sending || !newMessage.trim()}
                   >
-                    {sending ? '...' : '📤 Send'}
+                    {sending ? '...' : '📤'}
                   </button>
                 </form>
               </>
+            ) : (
+              <div style={styles.noConversationSelected}>
+                <div style={styles.emptyIcon}>💬</div>
+                <h3 style={styles.emptyTitle}>Select a conversation</h3>
+                <p style={styles.emptyText}>
+                  Choose a conversation from the list to start messaging
+                </p>
+              </div>
             )}
           </div>
         </div>
@@ -327,78 +353,69 @@ const styles = {
   page: {
     minHeight: '100vh',
     background: COLORS.light,
-    padding: '40px 0',
+    paddingTop: '80px',
+    paddingBottom: '20px',
   },
   container: {
     maxWidth: '1400px',
     margin: '0 auto',
     padding: '0 24px',
   },
-  header: {
-    marginBottom: '32px',
-  },
-  title: {
-    fontSize: '32px',
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  messagesLayout: {
+  messagesContainer: {
     display: 'grid',
     gridTemplateColumns: '350px 1fr',
     gap: '24px',
-    height: 'calc(100vh - 200px)',
+    height: 'calc(100vh - 120px)',
+    background: 'white',
+    borderRadius: '24px',
+    overflow: 'hidden',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
   },
   conversationsList: {
-    background: 'white',
-    borderRadius: '16px',
-    padding: '24px',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+    borderRight: `1px solid ${COLORS.border}`,
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden',
+  },
+  conversationsHeader: {
+    padding: '24px',
+    borderBottom: `1px solid ${COLORS.border}`,
   },
   conversationsTitle: {
-    fontSize: '20px',
+    fontSize: '24px',
     fontWeight: 'bold',
-    marginBottom: '20px',
-    color: '#333',
+    color: '#1a1a2e',
+    margin: 0,
   },
-  conversationItems: {
+  conversationsContent: {
     flex: 1,
     overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
   },
   conversationItem: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    padding: '12px',
-    borderRadius: '12px',
+    padding: '16px 24px',
     cursor: 'pointer',
-    transition: 'all 0.3s',
-    border: '2px solid transparent',
+    transition: 'background 0.3s',
+    borderBottom: `1px solid ${COLORS.border}`,
   },
   conversationItemActive: {
     background: COLORS.light,
-    border: `2px solid ${COLORS.primary}`,
+    borderLeft: `4px solid ${COLORS.primary}`,
   },
   conversationAvatar: {
-    width: '50px',
-    height: '50px',
-    borderRadius: '50%',
-    overflow: 'hidden',
     flexShrink: 0,
   },
   avatarImage: {
-    width: '100%',
-    height: '100%',
+    width: '48px',
+    height: '48px',
+    borderRadius: '50%',
     objectFit: 'cover',
   },
   avatarPlaceholder: {
-    width: '100%',
-    height: '100%',
+    width: '48px',
+    height: '48px',
+    borderRadius: '50%',
     background: COLORS.primary,
     color: 'white',
     display: 'flex',
@@ -409,12 +426,12 @@ const styles = {
   },
   conversationInfo: {
     flex: 1,
-    overflow: 'hidden',
+    minWidth: 0,
   },
   conversationName: {
     fontSize: '16px',
     fontWeight: '600',
-    color: '#333',
+    color: '#1a1a2e',
     marginBottom: '4px',
   },
   conversationLastMessage: {
@@ -424,35 +441,20 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
+  conversationTime: {
+    fontSize: '12px',
+    color: '#999',
+    flexShrink: 0,
+  },
   messagesArea: {
-    background: 'white',
-    borderRadius: '16px',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  noConversationSelected: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#666',
-  },
-  noConversationIcon: {
-    fontSize: '64px',
-    marginBottom: '16px',
-  },
-  noConversationText: {
-    fontSize: '16px',
+    height: '100%',
   },
   chatHeader: {
     padding: '20px 24px',
-    borderBottom: `2px solid ${COLORS.border}`,
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    borderBottom: `1px solid ${COLORS.border}`,
+    background: 'white',
   },
   chatHeaderInfo: {
     display: 'flex',
@@ -460,79 +462,70 @@ const styles = {
     gap: '12px',
   },
   chatAvatar: {
-    width: '50px',
-    height: '50px',
-    borderRadius: '50%',
-    overflow: 'hidden',
+    flexShrink: 0,
   },
   chatHeaderName: {
     fontSize: '18px',
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: 'bold',
+    color: '#1a1a2e',
   },
   chatHeaderStatus: {
     fontSize: '14px',
     color: '#666',
   },
-  viewProfileBtn: {
-    padding: '8px 16px',
-    background: 'transparent',
-    border: `2px solid ${COLORS.primary}`,
-    color: COLORS.primary,
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  messagesContainer: {
+  messagesContent: {
     flex: 1,
-    padding: '24px',
     overflowY: 'auto',
+    padding: '24px',
+    background: COLORS.light,
+  },
+  messagesList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: '12px',
   },
-  noMessages: {
-    textAlign: 'center',
-    padding: '40px',
-    color: '#666',
-  },
-  messageWrapper: {
+  messageItem: {
     display: 'flex',
-    marginBottom: '8px',
+  },
+  messageItemOwn: {
+    justifyContent: 'flex-end',
+  },
+  messageItemOther: {
+    justifyContent: 'flex-start',
   },
   messageBubble: {
     maxWidth: '70%',
     padding: '12px 16px',
     borderRadius: '16px',
-    wordWrap: 'break-word',
   },
-  messageBubbleSent: {
+  messageBubbleOwn: {
     background: COLORS.primary,
     color: 'white',
     borderBottomRightRadius: '4px',
   },
-  messageBubbleReceived: {
-    background: COLORS.light,
-    color: '#333',
+  messageBubbleOther: {
+    background: 'white',
+    color: '#1a1a2e',
     borderBottomLeftRadius: '4px',
   },
-  messageContent: {
+  messageText: {
     fontSize: '15px',
-    lineHeight: '1.4',
+    lineHeight: '1.5',
     marginBottom: '4px',
   },
   messageTime: {
     fontSize: '11px',
     opacity: 0.7,
-  },
-  messageForm: {
-    padding: '20px 24px',
-    borderTop: `2px solid ${COLORS.border}`,
-    display: 'flex',
-    gap: '12px',
+    textAlign: 'right',
   },
   messageInput: {
+    display: 'flex',
+    gap: '12px',
+    padding: '20px 24px',
+    borderTop: `1px solid ${COLORS.border}`,
+    background: 'white',
+  },
+  input: {
     flex: 1,
     padding: '12px 16px',
     border: `2px solid ${COLORS.border}`,
@@ -546,44 +539,56 @@ const styles = {
     color: 'white',
     border: 'none',
     borderRadius: '24px',
-    fontSize: '15px',
-    fontWeight: '600',
+    fontSize: '20px',
     cursor: 'pointer',
     transition: 'all 0.3s',
   },
-  sendButtonDisabled: {
-    background: '#ccc',
-    cursor: 'not-allowed',
-  },
-  emptyState: {
+  emptyConversations: {
+    padding: '60px 20px',
     textAlign: 'center',
-    padding: '40px 20px',
   },
-  emptyText: {
-    fontSize: '14px',
-    color: '#666',
+  emptyMessages: {
+    textAlign: 'center',
+    padding: '60px 20px',
+  },
+  noConversationSelected: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    padding: '40px',
+  },
+  emptyIcon: {
+    fontSize: '64px',
     marginBottom: '16px',
   },
-  browseButton: {
-    padding: '10px 20px',
-    background: COLORS.primary,
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
+  emptyTitle: {
+    fontSize: '20px',
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginBottom: '8px',
   },
-  loadingContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100vh',
-  },
-  loadingText: {
-    textAlign: 'center',
-    padding: '20px',
+  emptyText: {
+    fontSize: '16px',
     color: '#666',
+    marginBottom: '4px',
+  },
+  emptySubtext: {
+    fontSize: '14px',
+    color: '#999',
+  },
+  loadingState: {
+    padding: '40px 20px',
+    textAlign: 'center',
+  },
+  loader: {
+    fontSize: '16px',
+    color: '#666',
+  },
+  errorState: {
+    textAlign: 'center',
+    padding: '100px 20px',
   },
 };
 
