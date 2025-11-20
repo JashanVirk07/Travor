@@ -281,3 +281,69 @@ select:focus {
     transform: scale(1.05);
   }
 }
+
+/* About Page Hover Effects */
+
+/* Mission Image Hover */
+.mission-image:hover {
+  transform: scale(1.05);
+}
+
+.mission-image:hover img {
+  transform: scale(1.1);
+}
+
+/* Stat Cards Hover */
+.stat-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15) !important;
+}
+
+.stat-card:hover .stat-number {
+  transform: scale(1.1);
+}
+
+/* Feature Cards Hover */
+.feature-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15) !important;
+}
+
+.feature-card:hover .feature-icon {
+  transform: scale(1.2) rotate(5deg);
+}
+
+/* Team Cards Hover */
+.team-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15) !important;
+}
+
+.team-card:hover .team-image-wrapper {
+  transform: scale(1.1);
+  border-color: #a855f7;
+}
+
+.team-card:hover .team-image {
+  transform: scale(1.2);
+}
+
+/* Value Cards Hover */
+.value-card:hover {
+  background: white !important;
+  transform: translateY(-10px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15) !important;
+}
+
+.value-card:hover .value-icon {
+  transform: scale(1.2) rotate(10deg);
+}
+
+/* Button Hover Effects */
+button:hover {
+  transform: scale(1.05);
+}
+
+button:active {
+  transform: scale(0.98);
+}

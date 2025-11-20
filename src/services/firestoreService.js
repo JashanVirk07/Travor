@@ -194,28 +194,72 @@ export const bookingService = {
                 updatedAt: serverTimestamp(),
             });
 
-            return {
-                success: true,
-                bookingId: bookingDocRef.id,
-                ticketNumber: newBooking.ticketNumber,
-            };
+            console.log('Booking created successfully with ID:', bookingDocRef.id);
+            return bookingDocRef.id;
         } catch (error) {
             console.error('Error creating booking:', error);
             throw error;
         }
     },
 
-    getUserBookings: async (userId, role = 'traveler') => {
+    // Get traveler bookings - NEW FUNCTION
+    getTravelerBookings: async (travelerId) => {
         try {
-            const field = role === 'guide' ? 'guideId' : 'travelerId';
+            console.log('Fetching bookings for traveler:', travelerId);
             const q = query(
                 collection(db, 'bookings'),
-                where(field, '==', userId),
-                orderBy('startDate', 'desc')
+                where('travelerId', '==', travelerId),
+                orderBy('createdAt', 'desc')
             );
-
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(d => ({ bookingId: d.id, ...d.data() }));
+            const bookings = querySnapshot.docs.map(d => ({ 
+                bookingId: d.id, 
+                ...d.data() 
+            }));
+            console.log('Found bookings:', bookings);
+            return bookings;
+        } catch (error) {
+            console.error('Error fetching traveler bookings:', error);
+            // If the error is about missing index, return empty array
+            if (error.message.includes('index')) {
+                console.warn('Firestore index needed. Please create the index in Firebase Console.');
+                return [];
+            }
+            throw error;
+        }
+    },
+
+    // Get guide bookings
+    getGuideBookings: async (guideId) => {
+        try {
+            const q = query(
+                collection(db, 'bookings'),
+                where('guideId', '==', guideId),
+                orderBy('createdAt', 'desc')
+            );
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(d => ({ 
+                bookingId: d.id, 
+                ...d.data() 
+            }));
+        } catch (error) {
+            console.error('Error fetching guide bookings:', error);
+            if (error.message.includes('index')) {
+                console.warn('Firestore index needed. Please create the index in Firebase Console.');
+                return [];
+            }
+            throw error;
+        }
+    },
+
+    // Legacy function - kept for compatibility
+    getUserBookings: async (userId, role = 'traveler') => {
+        try {
+            if (role === 'guide') {
+                return await bookingService.getGuideBookings(userId);
+            } else {
+                return await bookingService.getTravelerBookings(userId);
+            }
         } catch (error) {
             console.error('Error fetching bookings:', error);
             return [];
