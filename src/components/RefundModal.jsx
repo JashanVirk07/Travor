@@ -1,4 +1,3 @@
-// src/components/RefundModal.jsx
 import React, { useState, useEffect } from 'react';
 import { enhancedPaymentService } from '../services/paymentService';
 import { COLORS } from '../utils/colors';
@@ -9,15 +8,23 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
   const [refundReason, setRefundReason] = useState('');
   const [error, setError] = useState(null);
 
+  // FIX: Safely get the ID. The profile page usually sets 'id', but services often look for 'bookingId'
+  const validBookingId = booking?.id || booking?.bookingId;
+
   useEffect(() => {
-    if (isOpen && booking) {
+    if (isOpen && booking && validBookingId) {
       checkEligibility();
     }
-  }, [isOpen, booking]);
+  }, [isOpen, booking, validBookingId]);
 
   const checkEligibility = async () => {
     try {
-      const result = await enhancedPaymentService.checkRefundEligibility(booking.bookingId);
+      if (!validBookingId) {
+        setError('Invalid Booking ID');
+        return;
+      }
+      // Use validBookingId instead of booking.bookingId
+      const result = await enhancedPaymentService.checkRefundEligibility(validBookingId);
       setEligibility(result);
     } catch (error) {
       console.error('Error checking eligibility:', error);
@@ -35,8 +42,9 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
     setError(null);
 
     try {
+      // Use validBookingId instead of booking.bookingId
       const result = await enhancedPaymentService.processRefund(
-        booking.bookingId,
+        validBookingId,
         refundReason
       );
 
@@ -64,15 +72,19 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
         <div style={styles.content}>
           {/* Booking Info */}
           <div style={styles.bookingInfo}>
-            <h3 style={styles.tourTitle}>{booking.tourDetails?.title || 'Tour'}</h3>
+            <h3 style={styles.tourTitle}>{booking?.tourDetails?.title || booking?.tourTitle || 'Tour'}</h3>
             <div style={styles.bookingDetails}>
               <div style={styles.detailRow}>
                 <span>📅 Date:</span>
-                <span>{new Date(booking.startDate).toLocaleDateString()}</span>
+                <span>
+                    {booking?.startDate ? 
+                        (booking.startDate.toDate ? booking.startDate.toDate().toLocaleDateString() : new Date(booking.startDate).toLocaleDateString()) 
+                        : 'N/A'}
+                </span>
               </div>
               <div style={styles.detailRow}>
                 <span>💰 Paid Amount:</span>
-                <span>${booking.totalPrice}</span>
+                <span>${booking?.totalPrice}</span>
               </div>
             </div>
           </div>

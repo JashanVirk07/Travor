@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 
 const RegisterPage = () => {
-  const { register, authError, clearError, setCurrentPage } = useAuth();
+  // FIX: Use 'signup' instead of 'register'
+  const { signup, authError, clearError, setCurrentPage } = useAuth();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -35,7 +36,7 @@ const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [step, setStep] = useState(1); // Multi-step form
+  const [step, setStep] = useState(1);
 
   const languageOptions = [
     'English', 'Spanish', 'French', 'German', 'Italian', 
@@ -47,7 +48,7 @@ const RegisterPage = () => {
     setFormData({ ...formData, [name]: value });
     setError('');
     setSuccess('');
-    clearError();
+    if(clearError) clearError();
   };
 
   const handleLanguageToggle = (language) => {
@@ -94,9 +95,10 @@ const RegisterPage = () => {
       return false;
     }
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+    // Simple password check (require number)
+    const passwordRegex = /^(?=.*[0-9])/;
     if (!passwordRegex.test(formData.password)) {
-      setError('Password must contain at least one uppercase letter, one lowercase letter, and one number');
+      setError('Password must contain at least one number');
       return false;
     }
 
@@ -144,7 +146,8 @@ const RegisterPage = () => {
     setLoading(true);
 
     try {
-      const result = await register(formData.email, formData.password, {
+      // FIX: Use 'signup'
+      const result = await signup(formData.email, formData.password, {
         name: formData.name,
         role: formData.role,
         phone: formData.phone,
@@ -154,10 +157,13 @@ const RegisterPage = () => {
       });
 
       if (result.success) {
-        setSuccess(result.message);
+        setSuccess(result.message || 'Account created successfully!');
         setTimeout(() => {
           setCurrentPage('login');
         }, 3000);
+      } else {
+        // FIX: Display error if success is false
+        setError(result.error || 'Registration failed.');
       }
     } catch (err) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -294,7 +300,7 @@ const RegisterPage = () => {
                   </button>
                 </div>
                 <span style={styles.hint}>
-                  At least 6 characters with uppercase, lowercase, and numbers
+                  At least 6 characters with at least one number
                 </span>
               </div>
 
