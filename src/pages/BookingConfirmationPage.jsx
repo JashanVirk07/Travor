@@ -1,13 +1,17 @@
-// src/pages/BookingConfirmationPage.jsx
+// src/pages/BookingConfirmationPage.jsx (UPDATED)
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { bookingService } from '../services/firestoreService';
+import { enhancedPaymentService } from '../services/paymentService';
+import PaymentModal from '../components/PaymentModal';
 import { COLORS } from '../utils/colors';
 
 const BookingConfirmationPage = () => {
   const { currentUser, userProfile, setCurrentPage } = useAuth();
   const [bookingInfo, setBookingInfo] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [bookingId, setBookingId] = useState(null);
 
   useEffect(() => {
     const storedBooking = sessionStorage.getItem('pendingBooking');
@@ -27,6 +31,7 @@ const BookingConfirmationPage = () => {
     setLoading(true);
     try {
       const bookingData = {
+        userId: currentUser.uid,  
         tourId: bookingInfo.tour.tourId,
         travelerId: currentUser.uid,
         guideId: bookingInfo.guide.guideId,
@@ -34,28 +39,57 @@ const BookingConfirmationPage = () => {
         numberOfParticipants: bookingInfo.numberOfParticipants,
         totalPrice: bookingInfo.totalPrice,
         specialRequests: bookingInfo.specialRequests || '',
-        status: 'pending',
+        status: 'pending', // Will be updated to 'confirmed' after payment
+        paymentStatus: 'pending',
+        tourTitle: bookingInfo.tour.title,
+        travelerName: userProfile?.name || currentUser.email,
       };
 
       console.log('Creating booking with data:', bookingData);
       
-      const bookingId = await bookingService.createBooking(bookingData);
+      const createdBookingId = await bookingService.createBooking(bookingData);
       
-      console.log('Booking created successfully with ID:', bookingId);
+      console.log('Booking created successfully with ID:', createdBookingId);
+      setBookingId(createdBookingId);
+
+      // Show payment modal
+      setShowPaymentModal(true);
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      alert('Failed to create booking: ' + error.message);
+    }
+    setLoading(false);
+  };
+
+  const handlePaymentSuccess = async (paymentResult) => {
+    try {
+      console.log('Payment successful:', paymentResult);
+
+      // Process the payment
+      await enhancedPaymentService.processPayment(bookingId, {
+        amount: bookingInfo.totalPrice,
+        currency: 'usd',
+        paymentMethodId: paymentResult.paymentMethodId,
+        transactionId: paymentResult.transactionId,
+      });
 
       // Clear pending booking
       sessionStorage.removeItem('pendingBooking');
 
+      // Close payment modal
+      setShowPaymentModal(false);
+
       // Show success message
-      alert('Booking confirmed successfully!');
+      alert('✅ Booking confirmed! Payment successful. Check your email for confirmation.');
       
       // Navigate to profile to see bookings
-      setCurrentPage('myprofile');
+      setTimeout(() => {
+        setCurrentPage('myprofile');
+      }, 1000);
     } catch (error) {
-      console.error('Error confirming booking:', error);
-      alert('Failed to confirm booking: ' + error.message);
+      console.error('Error processing payment:', error);
+      alert('❌ Payment processing failed: ' + error.message);
     }
-    setLoading(false);
   };
 
   if (!bookingInfo) {
@@ -70,8 +104,8 @@ const BookingConfirmationPage = () => {
     <div style={styles.page}>
       <div style={styles.container}>
         <div style={styles.header}>
-          <h1 style={styles.title}>Confirm Your Booking</h1>
-          <p style={styles.subtitle}>Review your booking details before confirming</p>
+          <h1 style={styles.title}>Review Your Booking</h1>
+          <p style={styles.subtitle}>Please review the details before proceeding to payment</p>
         </div>
 
         <div style={styles.content}>
@@ -181,18 +215,35 @@ const BookingConfirmationPage = () => {
               style={styles.confirmButton}
               disabled={loading}
             >
-              {loading ? 'Processing...' : 'Confirm Booking'}
+              {loading ? 'Processing...' : 'Proceed to Payment'}
             </button>
           </div>
 
           {/* Info Notice */}
           <div style={styles.notice}>
-            <p>✅ Free cancellation up to 24 hours before the tour</p>
-            <p>✅ Instant confirmation</p>
-            <p>✅ You'll receive a confirmation email</p>
+            <h3 style={styles.noticeTitle}>📋 Cancellation Policy</h3>
+            <p>✅ Full refund: Cancel 24+ hours before the tour</p>
+            <p>✅ 50% refund: Cancel less than 24 hours before</p>
+            <p>❌ No refund: After tour starts</p>
+            <p style={styles.secureNotice}>🔒 Secure payment powered by Stripe</p>
           </div>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      {showPaymentModal && bookingId && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            // Optionally cancel the booking if payment is not completed
+            alert('Payment cancelled. Your booking has not been confirmed.');
+            setCurrentPage('tour-details');
+          }}
+          bookingData={{ ...bookingInfo, bookingId }}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
+      )}
     </div>
   );
 };
@@ -391,11 +442,22 @@ const styles = {
   },
   notice: {
     marginTop: '32px',
-    padding: '20px',
+    padding: '24px',
     background: '#f0fdf4',
     borderRadius: '12px',
     fontSize: '14px',
     color: '#166534',
+    lineHeight: '1.8',
+  },
+  noticeTitle: {
+    fontSize: '16px',
+    fontWeight: 'bold',
+    marginBottom: '12px',
+  },
+  secureNotice: {
+    marginTop: '12px',
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   loadingContainer: {
     display: 'flex',
