@@ -37,7 +37,6 @@ const TourDetailsPage = () => {
         setGuide(guideData);
       }
 
-      // Load reviews for this tour
       if (tourData?.tourId) {
         const tourReviews = await reviewService.getTourReviews(tourData.tourId);
         setReviews(tourReviews);
@@ -75,14 +74,15 @@ const TourDetailsPage = () => {
       tour,
       guide,
       ...bookingData,
+      // IMPORTANT: Pass the time and duration to the booking object
+      startTime: tour.startTime || '09:00', // Default to 09:00 if guide didn't set one
+      duration: tour.duration, 
       totalPrice: tour.price * bookingData.numberOfParticipants,
     };
 
     sessionStorage.setItem('pendingBooking', JSON.stringify(bookingInfo));
     setCurrentPage('booking-confirmation');
   };
-
-  // REMOVED: handleContactGuide function is no longer needed here as button is removed
 
   if (loading) {
     return (
@@ -141,6 +141,15 @@ const TourDetailsPage = () => {
                   <div style={styles.infoValue}>{tour.duration}</div>
                 </div>
               </div>
+              {/* NEW: Start Time Card */}
+              <div style={styles.infoCard}>
+                <div style={styles.infoIcon}>⏰</div>
+                <div>
+                  <div style={styles.infoLabel}>Start Time</div>
+                  {/* Shows time set by guide, or defaults to 09:00 AM */}
+                  <div style={styles.infoValue}>{tour.startTime || '09:00'}</div>
+                </div>
+              </div>
               <div style={styles.infoCard}>
                 <div style={styles.infoIcon}>👥</div>
                 <div>
@@ -153,13 +162,6 @@ const TourDetailsPage = () => {
                 <div>
                   <div style={styles.infoLabel}>Difficulty</div>
                   <div style={styles.infoValue}>{tour.difficulty}</div>
-                </div>
-              </div>
-              <div style={styles.infoCard}>
-                <div style={styles.infoIcon}>🗣️</div>
-                <div>
-                  <div style={styles.infoLabel}>Languages</div>
-                  <div style={styles.infoValue}>{tour.languages?.join(', ')}</div>
                 </div>
               </div>
             </div>
@@ -287,7 +289,6 @@ const TourDetailsPage = () => {
                   <button onClick={handleBookNow} style={styles.bookButton}>
                     Book Now
                   </button>
-                  {/* REMOVED: Contact Guide button was here */}
                 </div>
               ) : (
                 <form onSubmit={handleSubmitBooking} style={styles.bookingForm}>
@@ -304,6 +305,12 @@ const TourDetailsPage = () => {
                       min={new Date().toISOString().split('T')[0]}
                       style={styles.input}
                     />
+                  </div>
+
+                  {/* Display the Start Time here as info */}
+                  <div style={styles.infoRow}>
+                    <span style={styles.label}>Start Time:</span>
+                    <span style={{ fontWeight: 'bold' }}>{tour.startTime || '09:00'}</span>
                   </div>
 
                   <div style={styles.formGroup}>
@@ -609,7 +616,6 @@ const styles = {
     cursor: 'pointer',
     transition: 'all 0.3s',
   },
-  // contactButton style removed from here as it's no longer used
   bookingForm: {
     display: 'flex',
     flexDirection: 'column',
@@ -647,6 +653,15 @@ const styles = {
     fontFamily: 'inherit',
     outline: 'none',
     resize: 'vertical',
+  },
+  infoRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px',
+    background: COLORS.light,
+    borderRadius: '8px',
+    marginBottom: '8px',
   },
   totalPrice: {
     display: 'flex',

@@ -15,6 +15,7 @@ import TourDetailsPage from './pages/TourDetailsPage.jsx';
 import GuideProfilePage from './pages/GuideProfilePage.jsx';
 import BookingConfirmationPage from './pages/BookingConfirmationPage.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
+import AdminDashboardPage from './pages/AdminDashboardPage.jsx';
 
 function AppContent() {
   const { currentPage } = useAuth();
@@ -45,6 +46,9 @@ function AppContent() {
         return <BookingConfirmationPage />;
       case 'messages':
         return <MessagesPage />;
+      // === NEW ADMIN ROUTE ADDED HERE ===
+      case 'admin-dashboard':
+        return <AdminDashboardPage />;
       default:
         return <HomePage />;
     }

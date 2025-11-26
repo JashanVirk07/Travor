@@ -3,8 +3,10 @@ import { useAuth } from '../context/AuthContext';
 import { COLORS } from '../utils/colors';
 import EditProfileModal from '../components/EditProfileModal';
 import RefundModal from '../components/RefundModal';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import ReviewModal from '../components/ReviewModal';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import { bookingService, favoritesService } from '../services/firestoreService';
 
 const MyProfilePage = () => {
   const { currentUser, userProfile, logout, setCurrentPage } = useAuth();
@@ -17,7 +19,8 @@ const MyProfilePage = () => {
   
   const [showEditModal, setShowEditModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
-  const [selectedBookingForRefund, setSelectedBookingForRefund] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -31,64 +34,55 @@ const MyProfilePage = () => {
     setLoading(true);
 
     try {
+      // 1. Fetch Bookings
       const bookingsQuery = query(
         collection(db, 'bookings'),
         where('userId', '==', currentUser.uid)
       );
 
-      const unsubscribeBookings = onSnapshot(
-        bookingsQuery,
-        (snapshot) => {
-          const bookingsData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          setBookings(bookingsData);
-          setLoading(false);
-        },
-        (error) => {
-          console.error('Error fetching bookings:', error);
-          setLoading(false);
-        }
-      );
+      const unsubscribeBookings = onSnapshot(bookingsQuery, (snapshot) => {
+        const bookingsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        checkBookingCompletion(bookingsData);
 
-      const favoritesQuery = query(
-        collection(db, 'favorites'),
-        where('userId', '==', currentUser.uid)
-      );
+        bookingsData.sort((a, b) => {
+            const dateA = a.startDate?.seconds || 0;
+            const dateB = b.startDate?.seconds || 0;
+            return dateB - dateA;
+        });
 
-      const unsubscribeFavorites = onSnapshot(
-        favoritesQuery,
-        (snapshot) => {
-          const favoritesData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          setFavorites(favoritesData);
-        },
-        (error) => { console.error('Error fetching favorites:', error); }
-      );
+        setBookings(bookingsData);
+        setLoading(false);
+      });
 
+      // 2. Fetch Favorites
+      favoritesService.getUserFavoritesIds(currentUser.uid).then(ids => {
+          const favQuery = query(collection(db, 'favorites'), where('userId', '==', currentUser.uid));
+          onSnapshot(favQuery, (snap) => {
+             const favs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+             setFavorites(favs);
+          });
+      });
+
+      // 3. Fetch Reviews
       const reviewsQuery = query(
         collection(db, 'reviews'),
         where('userId', '==', currentUser.uid)
       );
 
-      const unsubscribeReviews = onSnapshot(
-        reviewsQuery,
-        (snapshot) => {
-          const reviewsData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          setReviews(reviewsData);
-        },
-        (error) => { console.error('Error fetching reviews:', error); }
-      );
+      const unsubscribeReviews = onSnapshot(reviewsQuery, (snapshot) => {
+        const reviewsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setReviews(reviewsData);
+      });
 
       return () => {
         unsubscribeBookings();
-        unsubscribeFavorites();
         unsubscribeReviews();
       };
     } catch (error) {
@@ -97,9 +91,40 @@ const MyProfilePage = () => {
     }
   };
 
+  // Auto-complete logic
+  const checkBookingCompletion = async (bookingsList) => {
+    const now = new Date();
+    bookingsList.forEach(async (booking) => {
+      if (booking.status === 'confirmed' && booking.startDate) {
+        const tourDate = booking.startDate.toDate ? booking.startDate.toDate() : new Date(booking.startDate);
+        const timeString = booking.startTime || '09:00';
+        const [hours, minutes] = timeString.split(':').map(Number);
+        tourDate.setHours(hours || 9, minutes || 0, 0, 0);
+
+        const durationString = booking.duration || '2 hours';
+        const durationMatch = durationString.match(/(\d+(\.\d+)?)/); 
+        const durationHours = durationMatch ? parseFloat(durationMatch[0]) : 2;
+        const tourEndTime = new Date(tourDate.getTime() + durationHours * 60 * 60 * 1000);
+
+        if (now > tourEndTime) {
+          await bookingService.updateBookingStatus(booking.id, 'completed');
+        }
+      }
+    });
+  };
+
+  const hasReview = (bookingId) => {
+    return reviews.some(review => review.bookingId === bookingId);
+  };
+
   const handleRequestRefund = (booking) => {
-    setSelectedBookingForRefund(booking);
+    setSelectedBooking({ ...booking, bookingId: booking.id });
     setShowRefundModal(true);
+  };
+
+  const handleLeaveReview = (booking) => {
+    setSelectedBooking({ ...booking, bookingId: booking.id });
+    setShowReviewModal(true);
   };
 
   const handleChatWithGuide = (booking) => {
@@ -124,6 +149,7 @@ const MyProfilePage = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'confirmed': return '#10b981';
+      case 'completed': return '#3b82f6';
       case 'pending': return '#f59e0b';
       case 'cancelled': return '#ef4444';
       default: return '#666';
@@ -132,7 +158,6 @@ const MyProfilePage = () => {
 
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
-    // Handle both Firestore timestamp and string date
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -141,12 +166,10 @@ const MyProfilePage = () => {
     });
   };
 
-  // Helper function to safely get image source
   const getBookingImage = (booking) => {
     if (booking.tourImage) return booking.tourImage;
     if (booking.tour?.images?.[0]) return booking.tour.images[0];
     if (booking.tourDetails?.images?.[0]) return booking.tourDetails.images[0];
-    // Reliable fallback image from Unsplash
     return 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400';
   };
 
@@ -169,17 +192,32 @@ const MyProfilePage = () => {
               <h1 style={styles.userName}>{displayName}</h1>
               <p style={styles.userEmail}>{currentUser?.email}</p>
               <div style={styles.roleTag}>
-                {userProfile?.role === 'guide' ? '🗺️ Guide' : '✈️ Traveler'}
+                {userProfile?.role === 'guide' ? '🗺️ Guide' : 
+                 userProfile?.role === 'admin' ? '🛡️ Admin' : '✈️ Traveler'}
               </div>
             </div>
           </div>
 
-          <button 
-            onClick={() => setShowEditModal(true)}
-            style={styles.editButton}
-          >
-            ✏️ Edit Profile
-          </button>
+          {/* Header Actions */}
+          <div style={styles.headerActions}>
+            
+            {/* NEW: Admin Dashboard Button (Only visible to Admins) */}
+            {userProfile?.role === 'admin' && (
+                <button 
+                    onClick={() => setCurrentPage('admin-dashboard')}
+                    style={styles.adminButton}
+                >
+                    🛡️ Admin Panel
+                </button>
+            )}
+
+            <button 
+                onClick={() => setShowEditModal(true)}
+                style={styles.editButton}
+            >
+                ✏️ Edit Profile
+            </button>
+          </div>
         </div>
 
         {userProfile?.role === 'guide' && (
@@ -289,24 +327,17 @@ const MyProfilePage = () => {
                             </div>
                             <div style={styles.bookingInfoItem}>
                               <span style={styles.bookingIcon}>📅</span>
-                              {/* Fix: Check startDate if date is missing */}
                               <span>{formatDate(booking.date || booking.startDate)}</span>
                             </div>
                             <div style={styles.bookingInfoItem}>
-                              <span style={styles.bookingIcon}>👥</span>
-                              <span>{booking.participants || booking.numberOfParticipants} participant{booking.participants > 1 ? 's' : ''}</span>
+                              <span style={styles.bookingIcon}>⏰</span>
+                              <span>{booking.startTime || '09:00'}</span>
                             </div>
                             <div style={styles.bookingInfoItem}>
                               <span style={styles.bookingIcon}>💰</span>
                               <span style={styles.price}>${booking.totalPrice}</span>
                             </div>
                           </div>
-
-                          {booking.specialRequests && (
-                            <div style={styles.specialRequests}>
-                              <strong>Special Requests:</strong> {booking.specialRequests}
-                            </div>
-                          )}
 
                           {booking.refundStatus === 'completed' && (
                             <div style={styles.refundBadge}>
@@ -340,6 +371,15 @@ const MyProfilePage = () => {
                                 Request Refund
                               </button>
                             )}
+
+                            {booking.status === 'completed' && !hasReview(booking.id) && (
+                                <button
+                                    onClick={() => handleLeaveReview(booking)}
+                                    style={styles.reviewButton}
+                                >
+                                    ⭐ Leave Review
+                                </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -356,10 +396,7 @@ const MyProfilePage = () => {
                   <div style={styles.emptyState}>
                     <p style={styles.emptyIcon}>❤️</p>
                     <p style={styles.emptyText}>No favorites yet</p>
-                    <button
-                      onClick={() => setCurrentPage('destinations')}
-                      style={styles.browseButton}
-                    >
+                    <button onClick={() => setCurrentPage('destinations')} style={styles.browseButton}>
                       Explore Tours
                     </button>
                   </div>
@@ -400,9 +437,7 @@ const MyProfilePage = () => {
                   <div style={styles.emptyState}>
                     <p style={styles.emptyIcon}>⭐</p>
                     <p style={styles.emptyText}>No reviews yet</p>
-                    <p style={styles.emptySubtext}>
-                      Complete a booking to leave a review
-                    </p>
+                    <p style={styles.emptySubtext}>Complete a booking to leave a review</p>
                   </div>
                 ) : (
                   <div style={styles.reviewsList}>
@@ -434,17 +469,26 @@ const MyProfilePage = () => {
         onSuccess={() => console.log('Profile updated successfully')}
       />
 
-      {showRefundModal && selectedBookingForRefund && (
+      {showRefundModal && selectedBooking && (
         <RefundModal
           isOpen={showRefundModal}
           onClose={() => {
             setShowRefundModal(false);
-            setSelectedBookingForRefund(null);
+            setSelectedBooking(null);
           }}
-          booking={selectedBookingForRefund}
-          onRefundSuccess={() => {
-             // You can add logic here to refresh bookings if needed
-          }}
+          booking={selectedBooking}
+          onRefundSuccess={() => {}}
+        />
+      )}
+
+      {showReviewModal && selectedBooking && (
+        <ReviewModal
+            booking={selectedBooking}
+            onClose={() => {
+                setShowReviewModal(false);
+                setSelectedBooking(null);
+            }}
+            onSuccess={() => {}}
         />
       )}
     </div>
@@ -520,6 +564,27 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     width: 'fit-content',
+  },
+  // Header Buttons Container
+  headerActions: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+  },
+  // Admin Button Style
+  adminButton: {
+    padding: '12px 24px',
+    background: '#1f2937', // Dark grey for admin
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'background 0.3s',
   },
   editButton: {
     padding: '12px 24px',
@@ -758,6 +823,16 @@ const styles = {
   refundButton: {
     padding: '10px 20px',
     background: COLORS.danger,
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+  reviewButton: {
+    padding: '10px 20px',
+    background: '#f59e0b',
     color: 'white',
     border: 'none',
     borderRadius: '8px',

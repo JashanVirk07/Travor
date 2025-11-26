@@ -1,4 +1,3 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   createUserWithEmailAndPassword,
@@ -24,7 +23,6 @@ import {
   query,
   where,
   getDocs,
-  onSnapshot,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
@@ -66,6 +64,11 @@ export const AuthProvider = ({ children }) => {
 
     return unsubscribe;
   }, []);
+
+  // --- NEW FUNCTION: Clear Errors ---
+  const clearError = () => {
+    setAuthError(null);
+  };
 
   // Fetch user profile from Firestore
   const fetchUserProfile = async (uid) => {
@@ -156,6 +159,8 @@ export const AuthProvider = ({ children }) => {
         errorMessage = 'This account has been disabled';
       } else if (error.code === 'auth/too-many-requests') {
         errorMessage = 'Too many failed attempts. Please try again later';
+      } else if (error.code === 'auth/invalid-credential') {
+        errorMessage = 'Invalid email or password';
       }
 
       return { success: false, error: errorMessage, code: error.code };
@@ -334,15 +339,11 @@ export const AuthProvider = ({ children }) => {
   // Upload profile image to Firebase Storage
   const uploadProfileImage = async (imageFile) => {
     console.log('=== Starting Image Upload ===');
-    console.log('File name:', imageFile.name);
-    console.log('File size:', (imageFile.size / 1024 / 1024).toFixed(2), 'MB');
-    console.log('File type:', imageFile.type);
     
     try {
       if (!currentUser) {
         throw new Error('No user logged in');
       }
-      console.log('✓ User authenticated:', currentUser.uid);
 
       // Validate file
       if (!imageFile.type.startsWith('image/')) {
@@ -352,23 +353,20 @@ export const AuthProvider = ({ children }) => {
       if (imageFile.size > 5 * 1024 * 1024) {
         throw new Error('Image size must be less than 5MB');
       }
-      console.log('✓ File validation passed');
 
       // Check if storage is available
       if (!storage) {
         console.error('❌ Storage is not defined!');
-        throw new Error('Firebase Storage is not initialized. Please add "export const storage = getStorage(app)" to your firebase config file.');
+        throw new Error('Firebase Storage is not initialized.');
       }
-      console.log('✓ Storage is available');
 
       // Delete old profile image if exists
       if (userProfile?.profileImageUrl) {
         try {
           const oldImageRef = ref(storage, userProfile.profileImageUrl);
           await deleteObject(oldImageRef);
-          console.log('✓ Deleted old profile image');
         } catch (error) {
-          console.log('⚠ Could not delete old image (might not exist):', error.message);
+          console.log('⚠ Could not delete old image:', error.message);
         }
       }
 
@@ -377,22 +375,15 @@ export const AuthProvider = ({ children }) => {
       const fileExtension = imageFile.name.split('.').pop();
       const filename = `profile_${currentUser.uid}_${timestamp}.${fileExtension}`;
       const storagePath = `profile-images/${filename}`;
-      console.log('Storage path:', storagePath);
       
       const storageRef = ref(storage, storagePath);
-      console.log('✓ Created storage reference');
 
       // Upload file
-      console.log('Starting upload...');
       const snapshot = await uploadBytes(storageRef, imageFile);
-      console.log('✓ Upload complete. Bytes transferred:', snapshot.totalBytes);
 
       // Get download URL
-      console.log('Getting download URL...');
       const downloadURL = await getDownloadURL(snapshot.ref);
-      console.log('✓ Got download URL:', downloadURL);
 
-      console.log('=== Upload Successful ===');
       return {
         success: true,
         imageUrl: downloadURL,
@@ -400,29 +391,9 @@ export const AuthProvider = ({ children }) => {
       };
     } catch (error) {
       console.error('=== Upload Failed ===');
-      console.error('Error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
-      // Provide specific error messages
-      let userMessage = error.message;
-      
-      if (error.code === 'storage/unauthorized') {
-        userMessage = 'Upload permission denied. Please check Firebase Storage rules.';
-        console.error('💡 Fix: Update Storage rules in Firebase Console');
-      } else if (error.code === 'storage/canceled') {
-        userMessage = 'Upload was cancelled';
-      } else if (error.code === 'storage/unknown') {
-        userMessage = 'Firebase Storage is not enabled. Please enable Storage in Firebase Console.';
-        console.error('💡 Fix: Go to Firebase Console → Storage → Get Started');
-      } else if (error.message.includes('storage is not defined')) {
-        userMessage = 'Firebase Storage not initialized. Please contact support.';
-        console.error('💡 Fix: Add storage export to firebase config');
-      }
-      
       return {
         success: false,
-        error: userMessage,
+        error: error.message,
       };
     }
   };
@@ -628,6 +599,7 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     changePassword,
     changeEmail,
+    clearError, // Added this here!
 
     // Profile management
     updateUserProfile,

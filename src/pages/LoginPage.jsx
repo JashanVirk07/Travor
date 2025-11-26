@@ -23,7 +23,7 @@ const LoginPage = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setError('');
     setSuccess('');
-    clearError();
+    if (clearError) clearError();
   };
 
   const handleLogin = async (e) => {
@@ -37,11 +37,6 @@ const LoginPage = () => {
       return;
     }
 
-    if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -52,9 +47,12 @@ const LoginPage = () => {
         setTimeout(() => {
           setCurrentPage('myprofile');
         }, 1000);
+      } else {
+        // FIX: Handle returned errors properly
+        setError(result.error || 'Failed to login');
       }
     } catch (err) {
-      setError(err.message || 'Failed to login. Please try again.');
+      setError(err.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -70,21 +68,21 @@ const LoginPage = () => {
       return;
     }
 
-    if (!/\S+@\S+\.\S+/.test(resetEmail)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
     setLoading(true);
 
     try {
       const result = await resetPassword(resetEmail);
       if (result.success) {
         setSuccess(result.message);
+        // Clear form after delay
         setTimeout(() => {
           setShowForgotPassword(false);
           setResetEmail('');
-        }, 3000);
+          setSuccess('');
+        }, 5000);
+      } else {
+        // FIX: Handle returned errors (e.g. User not found)
+        setError(result.error || 'Failed to send reset email');
       }
     } catch (err) {
       setError(err.message || 'Failed to send reset email');
@@ -155,7 +153,11 @@ const LoginPage = () => {
               <div style={styles.forgotPasswordContainer}>
                 <button
                   type="button"
-                  onClick={() => setShowForgotPassword(true)}
+                  onClick={() => {
+                    setError('');
+                    setSuccess('');
+                    setShowForgotPassword(true);
+                  }}
                   style={styles.forgotPasswordButton}
                   disabled={loading}
                 >
@@ -465,15 +467,18 @@ const styles = {
 };
 
 // Add keyframe animation for loading spinner
-if (document.styleSheets.length > 0) {
+if (typeof document !== 'undefined' && document.styleSheets.length > 0) {
   const styleSheet = document.styleSheets[0];
-  styleSheet.insertRule(`
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-  `, styleSheet.cssRules.length);
+  try {
+    styleSheet.insertRule(`
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    `, styleSheet.cssRules.length);
+  } catch (e) {
+    // Ignore if rule already exists or cannot be inserted
+  }
 }
-
 
 export default LoginPage;
