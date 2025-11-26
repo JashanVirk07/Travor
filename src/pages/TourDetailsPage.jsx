@@ -1,4 +1,3 @@
-// src/pages/TourDetailsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { tourService, guideService, reviewService } from '../services/firestoreService';
@@ -83,22 +82,7 @@ const TourDetailsPage = () => {
     setCurrentPage('booking-confirmation');
   };
 
-  const handleContactGuide = () => {
-    if (!currentUser) {
-      alert('Please login to contact the guide');
-      setCurrentPage('login');
-      return;
-    }
-
-    sessionStorage.setItem('chatWithGuide', JSON.stringify({
-      guideId: guide.guideId,
-      guideName: guide.fullName,
-      tourId: tour.tourId,
-      tourTitle: tour.title,
-    }));
-    
-    setCurrentPage('messages');
-  };
+  // REMOVED: handleContactGuide function is no longer needed here as button is removed
 
   if (loading) {
     return (
@@ -303,9 +287,7 @@ const TourDetailsPage = () => {
                   <button onClick={handleBookNow} style={styles.bookButton}>
                     Book Now
                   </button>
-                  <button onClick={handleContactGuide} style={styles.contactButton}>
-                    💬 Contact Guide
-                  </button>
+                  {/* REMOVED: Contact Guide button was here */}
                 </div>
               ) : (
                 <form onSubmit={handleSubmitBooking} style={styles.bookingForm}>
@@ -627,16 +609,7 @@ const styles = {
     cursor: 'pointer',
     transition: 'all 0.3s',
   },
-  contactButton: {
-    padding: '12px',
-    background: 'transparent',
-    border: `2px solid ${COLORS.secondary}`,
-    color: COLORS.secondary,
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
+  // contactButton style removed from here as it's no longer used
   bookingForm: {
     display: 'flex',
     flexDirection: 'column',
