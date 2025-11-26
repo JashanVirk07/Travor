@@ -1,4 +1,3 @@
-// src/pages/GuideProfilePage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { guideService, tourService, reviewService } from '../services/firestoreService';
@@ -21,8 +20,6 @@ const GuideProfilePage = () => {
     }
   }, [guideId]);
 
-  // ... rest of the component stays the same
-
   const loadGuideData = async () => {
     setLoading(true);
     try {
@@ -40,20 +37,7 @@ const GuideProfilePage = () => {
     setLoading(false);
   };
 
-  const handleContactGuide = () => {
-    if (!currentUser) {
-      alert('Please login to contact the guide');
-      setCurrentPage('login');
-      return;
-    }
-
-    sessionStorage.setItem('chatWithGuide', JSON.stringify({
-      guideId: guide.guideId,
-      guideName: guide.fullName,
-    }));
-    
-    setCurrentPage('messages');
-  };
+  // REMOVED: handleContactGuide function
 
   if (loading) {
     return (
@@ -114,9 +98,7 @@ const GuideProfilePage = () => {
                 {guide.languages?.join(', ') || 'Not specified'}
               </div>
 
-              <button onClick={handleContactGuide} style={styles.contactButton}>
-                💬 Contact Guide
-              </button>
+              {/* REMOVED: Contact Guide Button */}
             </div>
           </div>
         </div>
@@ -191,10 +173,10 @@ const GuideProfilePage = () => {
                         onClick={() => {
                             sessionStorage.setItem('selectedTourId', tour.tourId);
                             setCurrentPage('tour-details');
-                    }}
+                        }}
                         style={styles.viewTourButton}
                         >
-                         View Details
+                          View Details
                         </button>
                     </div>
                   </div>
@@ -338,16 +320,7 @@ const styles = {
     color: '#666',
     marginBottom: '24px',
   },
-  contactButton: {
-    padding: '12px 32px',
-    background: COLORS.secondary,
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
+  // REMOVED: contactButton style
   section: {
     background: 'white',
     borderRadius: '16px',

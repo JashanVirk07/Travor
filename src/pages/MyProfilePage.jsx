@@ -1,68 +1,135 @@
-// src/pages/MyProfilePage.jsx
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext.jsx';
-import { bookingService, tourService } from '../services/firestoreService';
+import { useAuth } from '../context/AuthContext';
 import { COLORS } from '../utils/colors';
-import ReviewModal from '../components/ReviewModal.jsx';
+import EditProfileModal from '../components/EditProfileModal';
+import RefundModal from '../components/RefundModal';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const MyProfilePage = () => {
-  const { currentUser, userProfile, setCurrentPage } = useAuth();
+  const { currentUser, userProfile, logout, setCurrentPage } = useAuth();
+  
   const [activeTab, setActiveTab] = useState('bookings');
   const [bookings, setBookings] = useState([]);
+  const [favorites, setFavorites] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState(null);
+  
+  // Edit Profile Modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  
+  // Refund Modal
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [selectedBookingForRefund, setSelectedBookingForRefund] = useState(null);
 
   useEffect(() => {
     if (currentUser) {
-      loadBookings();
+      fetchUserData();
+    } else {
+      setLoading(false);
     }
   }, [currentUser]);
 
-  const loadBookings = async () => {
+  const fetchUserData = () => {
     setLoading(true);
+
     try {
-      console.log('Loading bookings for user:', currentUser.uid);
-      const userBookings = await bookingService.getTravelerBookings(currentUser.uid);
-      console.log('Fetched bookings:', userBookings);
-      
-      // Fetch tour details for each booking
-      const bookingsWithDetails = await Promise.all(
-        userBookings.map(async (booking) => {
-          try {
-            const tourDetails = await tourService.getTourById(booking.tourId);
-            return { ...booking, tourDetails };
-          } catch (error) {
-            console.error('Error fetching tour details:', error);
-            return booking;
-          }
-        })
+      // Fetch bookings
+      const bookingsQuery = query(
+        collection(db, 'bookings'),
+        where('userId', '==', currentUser.uid)
       );
-      
-      console.log('Bookings with details:', bookingsWithDetails);
-      setBookings(bookingsWithDetails);
+
+      const unsubscribeBookings = onSnapshot(
+        bookingsQuery,
+        (snapshot) => {
+          const bookingsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setBookings(bookingsData);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Error fetching bookings:', error);
+          setLoading(false);
+        }
+      );
+
+      // Fetch favorites
+      const favoritesQuery = query(
+        collection(db, 'favorites'),
+        where('userId', '==', currentUser.uid)
+      );
+
+      const unsubscribeFavorites = onSnapshot(
+        favoritesQuery,
+        (snapshot) => {
+          const favoritesData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setFavorites(favoritesData);
+        },
+        (error) => {
+          console.error('Error fetching favorites:', error);
+        }
+      );
+
+      // Fetch reviews
+      const reviewsQuery = query(
+        collection(db, 'reviews'),
+        where('userId', '==', currentUser.uid)
+      );
+
+      const unsubscribeReviews = onSnapshot(
+        reviewsQuery,
+        (snapshot) => {
+          const reviewsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setReviews(reviewsData);
+        },
+        (error) => {
+          console.error('Error fetching reviews:', error);
+        }
+      );
+
+      return () => {
+        unsubscribeBookings();
+        unsubscribeFavorites();
+        unsubscribeReviews();
+      };
     } catch (error) {
-      console.error('Error loading bookings:', error);
-    }
-    setLoading(false);
-  };
-
-  const handleCancelBooking = async (bookingId) => {
-    if (window.confirm('Are you sure you want to cancel this booking?')) {
-      try {
-        await bookingService.updateBookingStatus(bookingId, 'cancelled');
-        alert('Booking cancelled successfully');
-        loadBookings();
-      } catch (error) {
-        console.error('Error cancelling booking:', error);
-        alert('Failed to cancel booking');
-      }
+      console.error('Error setting up data listeners:', error);
+      setLoading(false);
     }
   };
 
-  const handleLeaveReview = (booking) => {
-    setSelectedBooking(booking);
-    setShowReviewModal(true);
+  const handleRequestRefund = (booking) => {
+    setSelectedBookingForRefund(booking);
+    setShowRefundModal(true);
+  };
+
+  // Logic to handle chatting with the guide
+  const handleChatWithGuide = (booking) => {
+    sessionStorage.setItem('chatWithGuide', JSON.stringify({
+      guideId: booking.guideId,
+      guideName: booking.guideName,
+      tourId: booking.tourId,
+      tourTitle: booking.tourTitle,
+    }));
+    setCurrentPage('messages');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setCurrentPage('login');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -71,251 +138,334 @@ const MyProfilePage = () => {
         return '#10b981';
       case 'pending':
         return '#f59e0b';
-      case 'completed':
-        return '#6366f1';
       case 'cancelled':
         return '#ef4444';
       default:
-        return '#6b7280';
+        return '#666';
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'confirmed':
-        return '✅';
-      case 'pending':
-        return '⏳';
-      case 'completed':
-        return '🎉';
-      case 'cancelled':
-        return '❌';
-      default:
-        return '📋';
-    }
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
-  if (!currentUser) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.errorState}>
-          <h2>Please Login</h2>
-          <p>You need to be logged in to view your profile</p>
-          <button onClick={() => setCurrentPage('login')} style={styles.button}>
-            Go to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Get display name - prioritize name, then fullName, then fallback to 'User'
+  const displayName = userProfile?.name || userProfile?.fullName || 'User';
+  
+  // Get profile image URL or create placeholder with first letter of name
+  const profileImageUrl = userProfile?.profileImageUrl;
+  const avatarLetter = displayName.charAt(0).toUpperCase();
 
   return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        {/* Profile Header */}
+    <div style={styles.container}>
+      {/* Profile Header Card */}
+      <div style={styles.profileCard}>
         <div style={styles.profileHeader}>
-          <div style={styles.profileAvatar}>
-            {userProfile?.profileImageUrl ? (
-              <img
-                src={userProfile.profileImageUrl}
-                alt={userProfile.fullName}
-                style={styles.avatarImage}
-              />
+          <div style={styles.profileInfo}>
+            {profileImageUrl ? (
+              <img src={profileImageUrl} alt={displayName} style={styles.avatar} />
             ) : (
               <div style={styles.avatarPlaceholder}>
-                {userProfile?.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                {avatarLetter}
+              </div>
+            )}
+            
+            <div style={styles.userInfo}>
+              <h1 style={styles.userName}>{displayName}</h1>
+              <p style={styles.userEmail}>{currentUser?.email}</p>
+              <div style={styles.roleTag}>
+                {userProfile?.role === 'guide' ? '🗺️ Guide' : '✈️ Traveler'}
+              </div>
+            </div>
+          </div>
+
+          {/* Edit Profile Button */}
+          <button 
+            onClick={() => setShowEditModal(true)}
+            style={styles.editButton}
+          >
+            ✏️ Edit Profile
+          </button>
+        </div>
+
+        {/* Additional Info for Guides */}
+        {userProfile?.role === 'guide' && (
+          <div style={styles.guideInfo}>
+            {userProfile?.location && (
+              <div style={styles.infoItem}>
+                <span style={styles.infoIcon}>📍</span>
+                <span>{userProfile.location}</span>
+              </div>
+            )}
+            {userProfile?.languages && userProfile.languages.length > 0 && (
+              <div style={styles.infoItem}>
+                <span style={styles.infoIcon}>🗣️</span>
+                <span>{userProfile.languages.join(', ')}</span>
+              </div>
+            )}
+            {userProfile?.phone && (
+              <div style={styles.infoItem}>
+                <span style={styles.infoIcon}>📞</span>
+                <span>{userProfile.phone}</span>
               </div>
             )}
           </div>
-          <div style={styles.profileInfo}>
-            <h1 style={styles.profileName}>{userProfile?.fullName || 'User'}</h1>
-            <p style={styles.profileEmail}>{currentUser.email}</p>
-            <div style={styles.profileBadge}>
-              {userProfile?.role === 'guide' ? '🎯 Guide' : '✈️ Traveler'}
-            </div>
+        )}
+
+        {/* Bio */}
+        {userProfile?.bio && (
+          <div style={styles.bioSection}>
+            <p style={styles.bioText}>{userProfile.bio}</p>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Tabs */}
-        <div style={styles.tabs}>
-          <button
-            onClick={() => setActiveTab('bookings')}
-            style={{
-              ...styles.tab,
-              ...(activeTab === 'bookings' ? styles.activeTab : {}),
-            }}
-          >
-            📅 My Bookings
-          </button>
-          <button
-            onClick={() => setActiveTab('favorites')}
-            style={{
-              ...styles.tab,
-              ...(activeTab === 'favorites' ? styles.activeTab : {}),
-            }}
-          >
-            ❤️ Favorites
-          </button>
-          <button
-            onClick={() => setActiveTab('reviews')}
-            style={{
-              ...styles.tab,
-              ...(activeTab === 'reviews' ? styles.activeTab : {}),
-            }}
-          >
-            ⭐ My Reviews
-          </button>
-        </div>
+      {/* Tabs */}
+      <div style={styles.tabs}>
+        <button
+          onClick={() => setActiveTab('bookings')}
+          style={{
+            ...styles.tab,
+            ...(activeTab === 'bookings' ? styles.activeTab : {}),
+          }}
+        >
+          📅 My Bookings
+        </button>
+        <button
+          onClick={() => setActiveTab('favorites')}
+          style={{
+            ...styles.tab,
+            ...(activeTab === 'favorites' ? styles.activeTab : {}),
+          }}
+        >
+          ❤️ Favorites
+        </button>
+        <button
+          onClick={() => setActiveTab('reviews')}
+          style={{
+            ...styles.tab,
+            ...(activeTab === 'reviews' ? styles.activeTab : {}),
+          }}
+        >
+          ⭐ My Reviews
+        </button>
+      </div>
 
-        {/* Content */}
-        <div style={styles.content}>
-          {activeTab === 'bookings' && (
-            <div>
-              <h2 style={styles.sectionTitle}>My Bookings</h2>
-              {loading ? (
-                <div style={styles.loadingState}>
-                  <div style={styles.loader}>Loading bookings...</div>
-                </div>
-              ) : bookings.length === 0 ? (
-                <div style={styles.emptyState}>
-                  <div style={styles.emptyIcon}>📅</div>
-                  <h3 style={styles.emptyTitle}>No Bookings Yet</h3>
-                  <p style={styles.emptyText}>
-                    Start exploring and book your first adventure!
-                  </p>
-                  <button
-                    onClick={() => setCurrentPage('destinations')}
-                    style={styles.button}
-                  >
-                    Browse Tours
-                  </button>
-                </div>
-              ) : (
-                <div style={styles.bookingsList}>
-                  {bookings.map((booking) => (
-                    <div key={booking.bookingId} style={styles.bookingCard}>
-                      <div style={styles.bookingImage}>
-                        <img
-                          src={
-                            booking.tourDetails?.images?.[0] ||
-                            'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400'
-                          }
-                          alt={booking.tourDetails?.title || 'Tour'}
-                          style={styles.tourImage}
-                        />
-                        <div
-                          style={{
-                            ...styles.statusBadge,
-                            background: getStatusColor(booking.status),
-                          }}
-                        >
-                          {getStatusIcon(booking.status)} {booking.status}
+      {/* Content Area */}
+      <div style={styles.content}>
+        {loading ? (
+          <div style={styles.loadingContainer}>
+            <div style={styles.spinner}></div>
+            <p>Loading...</p>
+          </div>
+        ) : (
+          <>
+            {/* My Bookings Tab */}
+            {activeTab === 'bookings' && (
+              <div style={styles.section}>
+                <h2 style={styles.sectionTitle}>My Bookings</h2>
+                {bookings.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    <p style={styles.emptyIcon}>📅</p>
+                    <p style={styles.emptyText}>No bookings yet</p>
+                    <button
+                      onClick={() => setCurrentPage('destinations')}
+                      style={styles.browseButton}
+                    >
+                      Browse Tours
+                    </button>
+                  </div>
+                ) : (
+                  <div style={styles.bookingsList}>
+                    {bookings.map((booking) => (
+                      <div key={booking.id} style={styles.bookingCard}>
+                        <div style={styles.bookingImageContainer}>
+                          <img
+                            src={booking.tourImage || '/placeholder-tour.jpg'}
+                            alt={booking.tourTitle}
+                            style={styles.bookingImage}
+                          />
+                          <div
+                            style={{
+                              ...styles.statusBadge,
+                              background: getStatusColor(booking.status),
+                            }}
+                          >
+                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                          </div>
+                        </div>
+
+                        <div style={styles.bookingDetails}>
+                          <h3 style={styles.bookingTitle}>{booking.tourTitle}</h3>
+
+                          <div style={styles.bookingInfo}>
+                            <div style={styles.bookingInfoItem}>
+                              <span style={styles.bookingIcon}>📍</span>
+                              <span>{booking.location}</span>
+                            </div>
+                            <div style={styles.bookingInfoItem}>
+                              <span style={styles.bookingIcon}>📅</span>
+                              <span>{formatDate(booking.date)}</span>
+                            </div>
+                            <div style={styles.bookingInfoItem}>
+                              <span style={styles.bookingIcon}>👥</span>
+                              <span>{booking.participants} participant{booking.participants > 1 ? 's' : ''}</span>
+                            </div>
+                            <div style={styles.bookingInfoItem}>
+                              <span style={styles.bookingIcon}>💰</span>
+                              <span style={styles.price}>${booking.totalPrice}</span>
+                            </div>
+                          </div>
+
+                          {booking.specialRequests && (
+                            <div style={styles.specialRequests}>
+                              <strong>Special Requests:</strong> {booking.specialRequests}
+                            </div>
+                          )}
+
+                          {/* Refund Badge */}
+                          {booking.refundStatus === 'completed' && (
+                            <div style={styles.refundBadge}>
+                              ✅ Refunded: ${booking.refundAmount?.toFixed(2)}
+                            </div>
+                          )}
+
+                          <div style={styles.bookingActions}>
+                            <button
+                              onClick={() => setCurrentPage('tour-details')}
+                              style={styles.viewButton}
+                            >
+                              View Tour
+                            </button>
+                            
+                            {/* Added Chat Button here */}
+                            <button
+                              onClick={() => handleChatWithGuide(booking)}
+                              style={styles.chatButton}
+                            >
+                              💬 Chat Guide
+                            </button>
+                            
+                            {booking.status === 'confirmed' && booking.paymentStatus === 'completed' && (
+                              <button
+                                onClick={() => handleRequestRefund(booking)}
+                                style={styles.refundButton}
+                              >
+                                Request Refund
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-                      <div style={styles.bookingContent}>
-                        <h3 style={styles.bookingTitle}>
-                          {booking.tourDetails?.title || 'Tour'}
-                        </h3>
-                        <div style={styles.bookingDetails}>
-                          <div style={styles.bookingDetail}>
-                            <span style={styles.detailIcon}>📍</span>
-                            <span>{booking.tourDetails?.location || 'Location'}</span>
-                          </div>
-                          <div style={styles.bookingDetail}>
-                            <span style={styles.detailIcon}>📅</span>
-                            <span>
-                              {booking.startDate
-                                ? new Date(booking.startDate).toLocaleDateString()
-                                : 'Date TBD'}
-                            </span>
-                          </div>
-                          <div style={styles.bookingDetail}>
-                            <span style={styles.detailIcon}>👥</span>
-                            <span>{booking.numberOfParticipants} participants</span>
-                          </div>
-                          <div style={styles.bookingDetail}>
-                            <span style={styles.detailIcon}>💰</span>
-                            <span style={styles.price}>${booking.totalPrice}</span>
-                          </div>
-                        </div>
-
-                        {booking.specialRequests && (
-                          <div style={styles.specialRequests}>
-                            <strong>Special Requests:</strong> {booking.specialRequests}
-                          </div>
-                        )}
-
-                        <div style={styles.bookingActions}>
-                          {booking.status === 'pending' && (
-                            <button
-                              onClick={() => handleCancelBooking(booking.bookingId)}
-                              style={styles.cancelButton}
-                            >
-                              Cancel Booking
-                            </button>
-                          )}
-                          {booking.status === 'completed' && !booking.hasReview && (
-                            <button
-                              onClick={() => handleLeaveReview(booking)}
-                              style={styles.reviewButton}
-                            >
-                              Leave Review
-                            </button>
-                          )}
+            {/* Favorites Tab */}
+            {activeTab === 'favorites' && (
+              <div style={styles.section}>
+                <h2 style={styles.sectionTitle}>Favorite Tours</h2>
+                {favorites.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    <p style={styles.emptyIcon}>❤️</p>
+                    <p style={styles.emptyText}>No favorites yet</p>
+                    <button
+                      onClick={() => setCurrentPage('destinations')}
+                      style={styles.browseButton}
+                    >
+                      Explore Tours
+                    </button>
+                  </div>
+                ) : (
+                  <div style={styles.favoritesGrid}>
+                    {favorites.map((favorite) => (
+                      <div key={favorite.id} style={styles.favoriteCard}>
+                        <img
+                          src={favorite.tourImage || '/placeholder-tour.jpg'}
+                          alt={favorite.tourTitle}
+                          style={styles.favoriteImage}
+                        />
+                        <div style={styles.favoriteContent}>
+                          <h3 style={styles.favoriteTitle}>{favorite.tourTitle}</h3>
+                          <p style={styles.favoriteLocation}>📍 {favorite.location}</p>
+                          <p style={styles.favoritePrice}>💰 ${favorite.price}</p>
                           <button
-                            onClick={() => {
-                              sessionStorage.setItem('selectedTourId', booking.tourId);
-                              setCurrentPage('tour-details');
-                            }}
-                            style={styles.viewButton}
+                            onClick={() => setCurrentPage('tour-details')}
+                            style={styles.viewTourButton}
                           >
                             View Tour
                           </button>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {activeTab === 'favorites' && (
-            <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>❤️</div>
-              <h3 style={styles.emptyTitle}>No Favorites Yet</h3>
-              <p style={styles.emptyText}>
-                Save your favorite tours to see them here
-              </p>
-            </div>
-          )}
-
-          {activeTab === 'reviews' && (
-            <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>⭐</div>
-              <h3 style={styles.emptyTitle}>No Reviews Yet</h3>
-              <p style={styles.emptyText}>
-                Complete a tour and leave a review!
-              </p>
-            </div>
-          )}
-        </div>
+            {/* Reviews Tab */}
+            {activeTab === 'reviews' && (
+              <div style={styles.section}>
+                <h2 style={styles.sectionTitle}>My Reviews</h2>
+                {reviews.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    <p style={styles.emptyIcon}>⭐</p>
+                    <p style={styles.emptyText}>No reviews yet</p>
+                    <p style={styles.emptySubtext}>
+                      Complete a booking to leave a review
+                    </p>
+                  </div>
+                ) : (
+                  <div style={styles.reviewsList}>
+                    {reviews.map((review) => (
+                      <div key={review.id} style={styles.reviewCard}>
+                        <div style={styles.reviewHeader}>
+                          <h3 style={styles.reviewTourTitle}>{review.tourTitle}</h3>
+                          <div style={styles.reviewRating}>
+                            {'⭐'.repeat(review.rating)}
+                          </div>
+                        </div>
+                        <p style={styles.reviewText}>{review.comment}</p>
+                        <p style={styles.reviewDate}>
+                          {formatDate(review.createdAt)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {/* Review Modal */}
-      {showReviewModal && selectedBooking && (
-        <ReviewModal
-          booking={selectedBooking}
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSuccess={() => {
+          // Profile will auto-update via AuthContext
+          console.log('Profile updated successfully');
+        }}
+      />
+
+      {/* Refund Modal */}
+      {showRefundModal && selectedBookingForRefund && (
+        <RefundModal
+          isOpen={showRefundModal}
           onClose={() => {
-            setShowReviewModal(false);
-            setSelectedBooking(null);
+            setShowRefundModal(false);
+            setSelectedBookingForRefund(null);
           }}
-          onReviewSubmitted={() => {
-            loadBookings();
-            setShowReviewModal(false);
-            setSelectedBooking(null);
-          }}
+          booking={selectedBookingForRefund}
         />
       )}
     </div>
@@ -323,40 +473,39 @@ const MyProfilePage = () => {
 };
 
 const styles = {
-  page: {
-    minHeight: '100vh',
-    background: COLORS.light,
-    paddingTop: '80px',
-    paddingBottom: '60px',
-  },
   container: {
     maxWidth: '1200px',
     margin: '0 auto',
-    padding: '0 24px',
+    padding: '40px 20px',
+  },
+  profileCard: {
+    background: 'white',
+    borderRadius: '16px',
+    padding: '32px',
+    marginBottom: '24px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
   },
   profileHeader: {
-    background: 'white',
-    borderRadius: '24px',
-    padding: '40px',
     display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '20px',
+  },
+  profileInfo: {
+    display: 'flex',
+    gap: '24px',
     alignItems: 'center',
-    gap: '32px',
-    marginBottom: '32px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
   },
-  profileAvatar: {
-    flexShrink: 0,
-  },
-  avatarImage: {
-    width: '120px',
-    height: '120px',
+  avatar: {
+    width: '100px',
+    height: '100px',
     borderRadius: '50%',
     objectFit: 'cover',
     border: `4px solid ${COLORS.primary}`,
   },
   avatarPlaceholder: {
-    width: '120px',
-    height: '120px',
+    width: '100px',
+    height: '100px',
     borderRadius: '50%',
     background: COLORS.primary,
     color: 'white',
@@ -367,44 +516,88 @@ const styles = {
     fontWeight: 'bold',
     border: `4px solid ${COLORS.primary}`,
   },
-  profileInfo: {
-    flex: 1,
+  userInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
   },
-  profileName: {
-    fontSize: '32px',
+  userName: {
+    fontSize: '28px',
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: '8px',
+    color: '#333',
+    margin: 0,
   },
-  profileEmail: {
+  userEmail: {
     fontSize: '16px',
     color: '#666',
-    marginBottom: '16px',
+    margin: 0,
   },
-  profileBadge: {
+  roleTag: {
     display: 'inline-block',
-    padding: '8px 16px',
+    padding: '6px 16px',
     background: COLORS.light,
+    color: COLORS.primary,
     borderRadius: '20px',
     fontSize: '14px',
     fontWeight: '600',
-    color: COLORS.primary,
+    width: 'fit-content',
+  },
+  editButton: {
+    padding: '12px 24px',
+    background: COLORS.primary,
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'background 0.3s',
+  },
+  guideInfo: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '20px',
+    marginTop: '20px',
+    padding: '20px',
+    background: COLORS.light,
+    borderRadius: '12px',
+  },
+  infoItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '14px',
+    color: '#666',
+  },
+  infoIcon: {
+    fontSize: '18px',
+  },
+  bioSection: {
+    marginTop: '20px',
+    padding: '20px',
+    background: '#f9fafb',
+    borderRadius: '12px',
+  },
+  bioText: {
+    fontSize: '15px',
+    lineHeight: '1.6',
+    color: '#555',
+    margin: 0,
   },
   tabs: {
     display: 'flex',
-    gap: '8px',
-    marginBottom: '32px',
-    background: 'white',
-    padding: '8px',
-    borderRadius: '16px',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+    gap: '12px',
+    marginBottom: '24px',
+    borderBottom: `2px solid ${COLORS.border}`,
   },
   tab: {
-    flex: 1,
     padding: '16px 24px',
     background: 'transparent',
     border: 'none',
-    borderRadius: '12px',
+    borderBottom: '3px solid transparent',
     fontSize: '16px',
     fontWeight: '600',
     color: '#666',
@@ -412,44 +605,86 @@ const styles = {
     transition: 'all 0.3s',
   },
   activeTab: {
-    background: COLORS.primary,
-    color: 'white',
+    color: COLORS.primary,
+    borderBottomColor: COLORS.primary,
   },
   content: {
     background: 'white',
-    borderRadius: '24px',
-    padding: '40px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+    borderRadius: '16px',
+    padding: '32px',
+    minHeight: '400px',
+  },
+  loadingContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '60px 20px',
+  },
+  spinner: {
+    width: '48px',
+    height: '48px',
+    border: `4px solid ${COLORS.border}`,
+    borderTop: `4px solid ${COLORS.primary}`,
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+  },
+  section: {
+    width: '100%',
   },
   sectionTitle: {
-    fontSize: '28px',
+    fontSize: '24px',
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: '32px',
+    color: '#333',
+    marginBottom: '24px',
+  },
+  emptyState: {
+    textAlign: 'center',
+    padding: '60px 20px',
+  },
+  emptyIcon: {
+    fontSize: '64px',
+    marginBottom: '16px',
+  },
+  emptyText: {
+    fontSize: '18px',
+    color: '#666',
+    marginBottom: '8px',
+  },
+  emptySubtext: {
+    fontSize: '14px',
+    color: '#999',
+    marginBottom: '24px',
+  },
+  browseButton: {
+    padding: '12px 32px',
+    background: COLORS.primary,
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
   },
   bookingsList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '24px',
+    gap: '20px',
   },
   bookingCard: {
     display: 'flex',
-    gap: '24px',
-    padding: '24px',
-    background: COLORS.light,
-    borderRadius: '16px',
-    transition: 'transform 0.3s',
-    cursor: 'pointer',
-  },
-  bookingImage: {
-    position: 'relative',
-    width: '200px',
-    height: '150px',
-    flexShrink: 0,
+    gap: '20px',
+    border: `2px solid ${COLORS.border}`,
     borderRadius: '12px',
     overflow: 'hidden',
+    transition: 'box-shadow 0.3s',
   },
-  tourImage: {
+  bookingImageContainer: {
+    position: 'relative',
+    width: '200px',
+    flexShrink: 0,
+  },
+  bookingImage: {
     width: '100%',
     height: '100%',
     objectFit: 'cover',
@@ -457,129 +692,181 @@ const styles = {
   statusBadge: {
     position: 'absolute',
     top: '12px',
-    right: '12px',
+    left: '12px',
     padding: '6px 12px',
-    borderRadius: '20px',
+    color: 'white',
+    borderRadius: '6px',
     fontSize: '12px',
     fontWeight: '600',
-    color: 'white',
     textTransform: 'capitalize',
   },
-  bookingContent: {
+  bookingDetails: {
     flex: 1,
+    padding: '20px',
     display: 'flex',
     flexDirection: 'column',
   },
   bookingTitle: {
     fontSize: '20px',
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: '16px',
+    color: '#333',
+    marginBottom: '12px',
   },
-  bookingDetails: {
+  bookingInfo: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
     gap: '12px',
-    marginBottom: '16px',
+    marginBottom: '12px',
   },
-  bookingDetail: {
+  bookingInfoItem: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     fontSize: '14px',
     color: '#666',
   },
-  detailIcon: {
+  bookingIcon: {
     fontSize: '16px',
   },
   price: {
-    fontSize: '18px',
     fontWeight: 'bold',
     color: COLORS.primary,
+    fontSize: '18px',
   },
   specialRequests: {
     padding: '12px',
-    background: 'white',
+    background: COLORS.light,
     borderRadius: '8px',
     fontSize: '14px',
     color: '#666',
-    marginBottom: '16px',
+    marginBottom: '12px',
+  },
+  refundBadge: {
+    display: 'inline-block',
+    padding: '8px 16px',
+    background: '#d1fae5',
+    color: '#065f46',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: '600',
+    marginBottom: '12px',
   },
   bookingActions: {
     display: 'flex',
     gap: '12px',
     marginTop: 'auto',
   },
-  cancelButton: {
-    padding: '10px 20px',
-    background: '#ef4444',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  reviewButton: {
-    padding: '10px 20px',
-    background: COLORS.secondary,
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
   viewButton: {
     padding: '10px 20px',
     background: 'white',
-    color: COLORS.primary,
     border: `2px solid ${COLORS.primary}`,
+    color: COLORS.primary,
     borderRadius: '8px',
     fontSize: '14px',
     fontWeight: '600',
     cursor: 'pointer',
   },
-  emptyState: {
-    textAlign: 'center',
-    padding: '80px 20px',
-  },
-  emptyIcon: {
-    fontSize: '64px',
-    marginBottom: '24px',
-  },
-  emptyTitle: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: '12px',
-  },
-  emptyText: {
-    fontSize: '16px',
-    color: '#666',
-    marginBottom: '32px',
-  },
-  button: {
-    padding: '14px 32px',
-    background: COLORS.primary,
-    color: 'white',
-    border: 'none',
-    borderRadius: '12px',
-    fontSize: '16px',
+  chatButton: {
+    padding: '10px 20px',
+    background: 'white',
+    border: `2px solid ${COLORS.secondary}`,
+    color: COLORS.secondary,
+    borderRadius: '8px',
+    fontSize: '14px',
     fontWeight: '600',
     cursor: 'pointer',
   },
-  loadingState: {
-    textAlign: 'center',
-    padding: '60px 20px',
+  refundButton: {
+    padding: '10px 20px',
+    background: COLORS.danger,
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
   },
-  loader: {
+  favoritesGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: '24px',
+  },
+  favoriteCard: {
+    border: `2px solid ${COLORS.border}`,
+    borderRadius: '12px',
+    overflow: 'hidden',
+    transition: 'transform 0.3s, box-shadow 0.3s',
+  },
+  favoriteImage: {
+    width: '100%',
+    height: '200px',
+    objectFit: 'cover',
+  },
+  favoriteContent: {
+    padding: '16px',
+  },
+  favoriteTitle: {
     fontSize: '18px',
-    color: '#666',
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: '8px',
   },
-  errorState: {
-    textAlign: 'center',
-    padding: '100px 20px',
+  favoriteLocation: {
+    fontSize: '14px',
+    color: '#666',
+    marginBottom: '4px',
+  },
+  favoritePrice: {
+    fontSize: '16px',
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: '12px',
+  },
+  viewTourButton: {
+    width: '100%',
+    padding: '10px',
+    background: COLORS.primary,
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+  reviewsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  reviewCard: {
+    padding: '20px',
+    border: `2px solid ${COLORS.border}`,
+    borderRadius: '12px',
+  },
+  reviewHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px',
+  },
+  reviewTourTitle: {
+    fontSize: '18px',
+    fontWeight: 'bold',
+    color: '#333',
+    margin: 0,
+  },
+  reviewRating: {
+    fontSize: '20px',
+  },
+  reviewText: {
+    fontSize: '15px',
+    lineHeight: '1.6',
+    color: '#666',
+    marginBottom: '12px',
+  },
+  reviewDate: {
+    fontSize: '12px',
+    color: '#999',
   },
 };
 
