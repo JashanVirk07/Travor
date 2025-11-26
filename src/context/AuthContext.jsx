@@ -1,38 +1,40 @@
 // src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  auth, 
-  db, 
-  storage 
-} from '../firebase';
-import { 
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  sendEmailVerification,
   sendPasswordResetEmail,
-  updateProfile,
+  updatePassword,
+  updateEmail,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  GoogleAuthProvider,
+  signInWithPopup,
+  deleteUser,
 } from 'firebase/auth';
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
+import {
+  doc,
+  setDoc,
+  getDoc,
   updateDoc,
-  serverTimestamp,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
 } from 'firebase/firestore';
-import { 
-  ref, 
-  uploadBytes, 
-  getDownloadURL,
-} from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { auth, db, storage } from '../firebase';
 
 const AuthContext = createContext();
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };
@@ -42,455 +44,610 @@ export const AuthProvider = ({ children }) => {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
+  
+  // Navigation state (for page routing)
   const [currentPage, setCurrentPage] = useState('home');
 
-  // Enhanced setCurrentPage that can accept data
-  const navigateToPage = (page, data = null) => {
-  setCurrentPage(page);
-  setPageData(data);
-  };
-
-  const clearError = () => setAuthError(null);
-
-  const getErrorMessage = (error) => {
-    const errorMessages = {
-      'auth/email-already-in-use': 'This email is already registered. Please sign in instead.',
-      'auth/invalid-email': 'Please enter a valid email address.',
-      'auth/operation-not-allowed': 'Email/password accounts are not enabled. Please contact support.',
-      'auth/weak-password': 'Password should be at least 6 characters long.',
-      'auth/user-disabled': 'This account has been disabled. Please contact support.',
-      'auth/user-not-found': 'No account found with this email address.',
-      'auth/wrong-password': 'Incorrect password. Please try again.',
-      'auth/too-many-requests': 'Too many failed attempts. Please try again later.',
-      'auth/network-request-failed': 'Network error. Please check your connection.',
-      'auth/requires-recent-login': 'Please log in again to perform this action.',
-    };
-    
-    return errorMessages[error.code] || error.message || 'An error occurred. Please try again.';
-  };
-
-  // Register new user
-  const register = async (email, password, userData) => {
-    try {
+  // Listen for auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
       setAuthError(null);
-      
-      console.log('🚀 Starting registration for:', email);
-      
-      // Create auth user
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
 
-      console.log('✅ Auth user created:', user.uid);
-
-      // Send email verification
-      await sendEmailVerification(user);
-      console.log('✅ Verification email sent');
-
-      // Determine membership dates
-      const now = new Date();
-      const isGuide = userData.role === 'guide';
-      const membershipStartDate = now.toISOString();
-      const membershipEndDate = new Date(now.setFullYear(now.getFullYear() + 1)).toISOString();
-
-      // Create user profile in Firestore (users collection)
-      const userDocData = {
-        uid: user.uid,
-        email: user.email,
-        name: userData.name || '',
-        role: userData.role || 'traveler',
-        
-        // Profile fields
-        phone: userData.phone || '',
-        bio: userData.bio || '',
-        languages: userData.languages || [],
-        location: userData.location || '',
-        
-        // Verification status
-        emailVerified: false,
-        verificationStatus: 'pending',
-        verificationDocuments: [],
-        
-        // Membership fields (for guides)
-        ...(isGuide && {
-          membershipStatus: 'trial',
-          membershipType: 'basic',
-          membershipStartDate,
-          membershipEndDate,
-          isFirstYearFree: true,
-          registrationFeePaid: false,
-          featuredListing: false,
-          
-          certifications: [],
-          rating: 0,
-          reviewCount: 0,
-          toursCompleted: 0,
-          profileImages: [],
-          videoIntroUrl: '',
-        }),
-        
-        // Timestamps
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastLoginAt: serverTimestamp(),
-        signupDate: membershipStartDate,
-      };
-
-      await setDoc(doc(db, 'users', user.uid), userDocData);
-      console.log('✅ User document created in users collection');
-
-      // If guide, create additional records
-      if (isGuide) {
-        try {
-          // Create membership record
-          await setDoc(doc(db, 'memberships', user.uid), {
-            userId: user.uid,
-            type: 'basic',
-            status: 'trial',
-            startDate: membershipStartDate,
-            endDate: membershipEndDate,
-            isFirstYearFree: true,
-            privileges: {
-              featuredListing: false,
-              prioritySupport: false,
-              advancedAnalytics: false,
-            },
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          console.log('✅ Membership document created');
-
-          // Create guide profile in guides collection
-          await setDoc(doc(db, 'guides', user.uid), {
-            userId: user.uid,
-            fullName: userData.name,
-            email: user.email,
-            bio: userData.bio || '',
-            location: userData.location || '',
-            languages: userData.languages || [],
-            phone: userData.phone || '',
-            rating: 0,
-            reviewCount: 0,
-            tourCount: 0,
-            toursCompleted: 0,
-            isVerified: true, // Auto-verify new guides
-            certifications: [],
-            profileImageUrl: '',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          console.log('✅ Guide profile created in guides collection');
-        } catch (guideError) {
-          console.error('❌ Error creating guide records:', guideError);
-          // Don't throw error - allow user account creation to succeed
-        }
+      if (user) {
+        // Fetch user profile from Firestore
+        await fetchUserProfile(user.uid);
+      } else {
+        setUserProfile(null);
       }
 
-      return { 
-        success: true, 
-        user: userCredential.user,
-        message: 'Registration successful! Please check your email to verify your account.' 
-      };
+      setLoading(false);
+    });
 
-    } catch (error) {
-      console.error('❌ Registration error:', error);
-      const errorMessage = getErrorMessage(error);
-      setAuthError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
-
-  // Login user
-  const login = async (email, password) => {
-    try {
-      setAuthError(null);
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Update last login time
-      await updateDoc(doc(db, 'users', userCredential.user.uid), {
-        lastLoginAt: serverTimestamp()
-      });
-
-      return { 
-        success: true, 
-        user: userCredential.user 
-      };
-
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      setAuthError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
-
-  // Logout user
-  const logout = async () => {
-    try {
-      setAuthError(null);
-      await signOut(auth);
-      setCurrentUser(null);
-      setUserProfile(null);
-      setCurrentPage('home');
-      return { success: true };
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      setAuthError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
-
-  // Reset password
-  const resetPassword = async (email) => {
-    try {
-      setAuthError(null);
-      await sendPasswordResetEmail(auth, email);
-      return { 
-        success: true, 
-        message: 'Password reset email sent. Please check your inbox.' 
-      };
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      setAuthError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
-
-  // Update user profile
-  const updateUserProfile = async (updates) => {
-    try {
-      setAuthError(null);
-      if (!currentUser) throw new Error('No user logged in');
-
-      const userRef = doc(db, 'users', currentUser.uid);
-      
-      // Update Firestore
-      await updateDoc(userRef, {
-        ...updates,
-        updatedAt: serverTimestamp()
-      });
-
-      // Update auth profile if name changed
-      if (updates.name && updates.name !== currentUser.displayName) {
-        await updateProfile(currentUser, {
-          displayName: updates.name
-        });
-      }
-
-      // If user is a guide, also update guide profile
-      if (userProfile?.role === 'guide') {
-        const guideRef = doc(db, 'guides', currentUser.uid);
-        await updateDoc(guideRef, {
-          fullName: updates.name || userProfile.name,
-          bio: updates.bio || userProfile.bio,
-          location: updates.location || userProfile.location,
-          languages: updates.languages || userProfile.languages,
-          phone: updates.phone || userProfile.phone,
-          updatedAt: serverTimestamp()
-        });
-      }
-
-      // Refresh user profile
-      await fetchUserProfile(currentUser.uid);
-
-      return { success: true, message: 'Profile updated successfully' };
-
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      setAuthError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
-
-  // Upload profile image
-  const uploadProfileImage = async (file) => {
-    try {
-      setAuthError(null);
-      if (!currentUser) throw new Error('No user logged in');
-
-      const fileExtension = file.name.split('.').pop();
-      const fileName = `profile_${currentUser.uid}_${Date.now()}.${fileExtension}`;
-      const storageRef = ref(storage, `users/${currentUser.uid}/profile/${fileName}`);
-
-      // Upload file
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // Update user profile with image URL
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        profileImageUrl: downloadURL,
-        updatedAt: serverTimestamp()
-      });
-
-      // If guide, update guide profile too
-      if (userProfile?.role === 'guide') {
-        await updateDoc(doc(db, 'guides', currentUser.uid), {
-          profileImageUrl: downloadURL,
-          updatedAt: serverTimestamp()
-        });
-      }
-
-      // Refresh profile
-      await fetchUserProfile(currentUser.uid);
-
-      return { success: true, imageUrl: downloadURL };
-
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      setAuthError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
-
-  // Upload verification documents
-  const uploadVerificationDocuments = async (idFile, selfieFile, certificateFile = null) => {
-    try {
-      setAuthError(null);
-      if (!currentUser) throw new Error('No user logged in');
-
-      const uploadedDocs = [];
-
-      // Upload ID document
-      if (idFile) {
-        const idRef = ref(storage, `users/${currentUser.uid}/verification/id_${Date.now()}`);
-        await uploadBytes(idRef, idFile);
-        const idUrl = await getDownloadURL(idRef);
-        uploadedDocs.push({ type: 'id', url: idUrl, uploadedAt: new Date().toISOString() });
-      }
-
-      // Upload selfie
-      if (selfieFile) {
-        const selfieRef = ref(storage, `users/${currentUser.uid}/verification/selfie_${Date.now()}`);
-        await uploadBytes(selfieRef, selfieFile);
-        const selfieUrl = await getDownloadURL(selfieRef);
-        uploadedDocs.push({ type: 'selfie', url: selfieUrl, uploadedAt: new Date().toISOString() });
-      }
-
-      // Upload police certificate (for guides)
-      if (certificateFile && userProfile?.role === 'guide') {
-        const certRef = ref(storage, `users/${currentUser.uid}/verification/police_cert_${Date.now()}`);
-        await uploadBytes(certRef, certificateFile);
-        const certUrl = await getDownloadURL(certRef);
-        uploadedDocs.push({ type: 'police_certificate', url: certUrl, uploadedAt: new Date().toISOString() });
-      }
-
-      // Update user profile
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        verificationDocuments: uploadedDocs,
-        verificationStatus: 'pending',
-        verificationSubmittedAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      await fetchUserProfile(currentUser.uid);
-
-      return { 
-        success: true, 
-        message: 'Verification documents uploaded successfully. Admin will review them shortly.' 
-      };
-
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      setAuthError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
+    return unsubscribe;
+  }, []);
 
   // Fetch user profile from Firestore
   const fetchUserProfile = async (uid) => {
     try {
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (userDoc.exists()) {
-        const profile = { uid, ...userDoc.data() };
-        setUserProfile(profile);
-        return profile;
+        const profileData = { id: userDoc.id, ...userDoc.data() };
+        setUserProfile(profileData);
+        return { success: true, profile: profileData };
+      } else {
+        console.warn('User profile not found in Firestore');
+        return { success: false, error: 'Profile not found' };
       }
-      return null;
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      return null;
+      setAuthError(error.message);
+      return { success: false, error: error.message };
     }
   };
 
-  // Check if user is guide
+  // Sign up new user with email and password
+  const signup = async (email, password, userData) => {
+    try {
+      setAuthError(null);
+
+      // Create authentication user
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Create user profile in Firestore
+      const userProfileData = {
+        email: user.email,
+        name: userData.name || userData.fullName || '',
+        fullName: userData.name || userData.fullName || '',
+        role: userData.role || 'traveler',
+        phone: userData.phone || '',
+        location: userData.location || '',
+        bio: userData.bio || '',
+        languages: userData.languages || [],
+        profileImageUrl: userData.profileImageUrl || '',
+        isEmailVerified: false,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastLoginAt: new Date(),
+      };
+
+      await setDoc(doc(db, 'users', user.uid), userProfileData);
+      setUserProfile({ id: user.uid, ...userProfileData });
+
+      return { success: true, user, profile: userProfileData };
+    } catch (error) {
+      console.error('Error signing up:', error);
+      setAuthError(error.message);
+      return { success: false, error: error.message, code: error.code };
+    }
+  };
+
+  // Sign in with email and password
+  const login = async (email, password) => {
+    try {
+      setAuthError(null);
+
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Update last login time
+      await updateDoc(doc(db, 'users', user.uid), {
+        lastLoginAt: new Date(),
+      });
+
+      await fetchUserProfile(user.uid);
+
+      return { success: true, user };
+    } catch (error) {
+      console.error('Error logging in:', error);
+      setAuthError(error.message);
+
+      // Provide user-friendly error messages
+      let errorMessage = error.message;
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address';
+      } else if (error.code === 'auth/user-disabled') {
+        errorMessage = 'This account has been disabled';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later';
+      }
+
+      return { success: false, error: errorMessage, code: error.code };
+    }
+  };
+
+  // Sign in with Google
+  const signInWithGoogle = async () => {
+    try {
+      setAuthError(null);
+
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Check if user profile exists
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+
+      if (!userDoc.exists()) {
+        // Create new profile for Google user
+        const userProfileData = {
+          email: user.email,
+          name: user.displayName || '',
+          fullName: user.displayName || '',
+          role: 'traveler',
+          phone: user.phoneNumber || '',
+          location: '',
+          bio: '',
+          languages: [],
+          profileImageUrl: user.photoURL || '',
+          isEmailVerified: user.emailVerified,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastLoginAt: new Date(),
+        };
+
+        await setDoc(doc(db, 'users', user.uid), userProfileData);
+        setUserProfile({ id: user.uid, ...userProfileData });
+      } else {
+        // Update last login for existing user
+        await updateDoc(doc(db, 'users', user.uid), {
+          lastLoginAt: new Date(),
+        });
+        await fetchUserProfile(user.uid);
+      }
+
+      return { success: true, user };
+    } catch (error) {
+      console.error('Error signing in with Google:', error);
+      setAuthError(error.message);
+      return { success: false, error: error.message, code: error.code };
+    }
+  };
+
+  // Sign out user
+  const logout = async () => {
+    try {
+      setAuthError(null);
+
+      await signOut(auth);
+      setUserProfile(null);
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error logging out:', error);
+      setAuthError(error.message);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Send password reset email
+  const resetPassword = async (email) => {
+    try {
+      setAuthError(null);
+
+      await sendPasswordResetEmail(auth, email);
+
+      return { success: true, message: 'Password reset email sent' };
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      setAuthError(error.message);
+
+      let errorMessage = error.message;
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address';
+      }
+
+      return { success: false, error: errorMessage, code: error.code };
+    }
+  };
+
+  // Update user password (requires recent login)
+  const changePassword = async (currentPassword, newPassword) => {
+    try {
+      setAuthError(null);
+
+      if (!currentUser) {
+        throw new Error('No user logged in');
+      }
+
+      // Reauthenticate user
+      const credential = EmailAuthProvider.credential(
+        currentUser.email,
+        currentPassword
+      );
+      await reauthenticateWithCredential(currentUser, credential);
+
+      // Update password
+      await updatePassword(currentUser, newPassword);
+
+      return { success: true, message: 'Password updated successfully' };
+    } catch (error) {
+      console.error('Error changing password:', error);
+      setAuthError(error.message);
+
+      let errorMessage = error.message;
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Current password is incorrect';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'New password is too weak';
+      } else if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please log out and log in again before changing password';
+      }
+
+      return { success: false, error: errorMessage, code: error.code };
+    }
+  };
+
+  // Update user email (requires recent login)
+  const changeEmail = async (newEmail, password) => {
+    try {
+      setAuthError(null);
+
+      if (!currentUser) {
+        throw new Error('No user logged in');
+      }
+
+      // Reauthenticate user
+      const credential = EmailAuthProvider.credential(currentUser.email, password);
+      await reauthenticateWithCredential(currentUser, credential);
+
+      // Update email in Firebase Auth
+      await updateEmail(currentUser, newEmail);
+
+      // Update email in Firestore
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        email: newEmail,
+        updatedAt: new Date(),
+      });
+
+      await fetchUserProfile(currentUser.uid);
+
+      return { success: true, message: 'Email updated successfully' };
+    } catch (error) {
+      console.error('Error changing email:', error);
+      setAuthError(error.message);
+
+      let errorMessage = error.message;
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Password is incorrect';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address';
+      } else if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Email is already in use';
+      } else if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please log out and log in again before changing email';
+      }
+
+      return { success: false, error: errorMessage, code: error.code };
+    }
+  };
+
+  // Upload profile image to Firebase Storage
+  const uploadProfileImage = async (imageFile) => {
+    console.log('=== Starting Image Upload ===');
+    console.log('File name:', imageFile.name);
+    console.log('File size:', (imageFile.size / 1024 / 1024).toFixed(2), 'MB');
+    console.log('File type:', imageFile.type);
+    
+    try {
+      if (!currentUser) {
+        throw new Error('No user logged in');
+      }
+      console.log('✓ User authenticated:', currentUser.uid);
+
+      // Validate file
+      if (!imageFile.type.startsWith('image/')) {
+        throw new Error('File must be an image');
+      }
+
+      if (imageFile.size > 5 * 1024 * 1024) {
+        throw new Error('Image size must be less than 5MB');
+      }
+      console.log('✓ File validation passed');
+
+      // Check if storage is available
+      if (!storage) {
+        console.error('❌ Storage is not defined!');
+        throw new Error('Firebase Storage is not initialized. Please add "export const storage = getStorage(app)" to your firebase config file.');
+      }
+      console.log('✓ Storage is available');
+
+      // Delete old profile image if exists
+      if (userProfile?.profileImageUrl) {
+        try {
+          const oldImageRef = ref(storage, userProfile.profileImageUrl);
+          await deleteObject(oldImageRef);
+          console.log('✓ Deleted old profile image');
+        } catch (error) {
+          console.log('⚠ Could not delete old image (might not exist):', error.message);
+        }
+      }
+
+      // Create a unique filename
+      const timestamp = Date.now();
+      const fileExtension = imageFile.name.split('.').pop();
+      const filename = `profile_${currentUser.uid}_${timestamp}.${fileExtension}`;
+      const storagePath = `profile-images/${filename}`;
+      console.log('Storage path:', storagePath);
+      
+      const storageRef = ref(storage, storagePath);
+      console.log('✓ Created storage reference');
+
+      // Upload file
+      console.log('Starting upload...');
+      const snapshot = await uploadBytes(storageRef, imageFile);
+      console.log('✓ Upload complete. Bytes transferred:', snapshot.totalBytes);
+
+      // Get download URL
+      console.log('Getting download URL...');
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      console.log('✓ Got download URL:', downloadURL);
+
+      console.log('=== Upload Successful ===');
+      return {
+        success: true,
+        imageUrl: downloadURL,
+        message: 'Image uploaded successfully',
+      };
+    } catch (error) {
+      console.error('=== Upload Failed ===');
+      console.error('Error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      // Provide specific error messages
+      let userMessage = error.message;
+      
+      if (error.code === 'storage/unauthorized') {
+        userMessage = 'Upload permission denied. Please check Firebase Storage rules.';
+        console.error('💡 Fix: Update Storage rules in Firebase Console');
+      } else if (error.code === 'storage/canceled') {
+        userMessage = 'Upload was cancelled';
+      } else if (error.code === 'storage/unknown') {
+        userMessage = 'Firebase Storage is not enabled. Please enable Storage in Firebase Console.';
+        console.error('💡 Fix: Go to Firebase Console → Storage → Get Started');
+      } else if (error.message.includes('storage is not defined')) {
+        userMessage = 'Firebase Storage not initialized. Please contact support.';
+        console.error('💡 Fix: Add storage export to firebase config');
+      }
+      
+      return {
+        success: false,
+        error: userMessage,
+      };
+    }
+  };
+
+  // Update user profile in Firestore
+  const updateUserProfile = async (updates) => {
+    try {
+      if (!currentUser) {
+        throw new Error('No user logged in');
+      }
+
+      // Prevent email updates through this function
+      if (updates.email) {
+        throw new Error('Email cannot be updated through profile update. Use changeEmail instead.');
+      }
+
+      // Add updatedAt timestamp
+      const updateData = {
+        ...updates,
+        updatedAt: new Date(),
+      };
+
+      // Update in Firestore
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, updateData);
+
+      // Update local state
+      setUserProfile((prev) => ({
+        ...prev,
+        ...updateData,
+      }));
+
+      return { success: true, message: 'Profile updated successfully' };
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Refresh user profile from Firestore
+  const refreshUserProfile = async () => {
+    if (currentUser) {
+      return await fetchUserProfile(currentUser.uid);
+    }
+    return { success: false, error: 'No user logged in' };
+  };
+
+  // Delete user account
+  const deleteAccount = async (password) => {
+    try {
+      setAuthError(null);
+
+      if (!currentUser) {
+        throw new Error('No user logged in');
+      }
+
+      // Reauthenticate user
+      const credential = EmailAuthProvider.credential(currentUser.email, password);
+      await reauthenticateWithCredential(currentUser, credential);
+
+      const userId = currentUser.uid;
+
+      // Delete profile image from storage if exists
+      if (userProfile?.profileImageUrl) {
+        try {
+          const imageRef = ref(storage, userProfile.profileImageUrl);
+          await deleteObject(imageRef);
+        } catch (error) {
+          console.log('Error deleting profile image:', error);
+        }
+      }
+
+      // Delete user document from Firestore
+      await deleteDoc(doc(db, 'users', userId));
+
+      // Delete authentication user
+      await deleteUser(currentUser);
+
+      setUserProfile(null);
+
+      return { success: true, message: 'Account deleted successfully' };
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      setAuthError(error.message);
+
+      let errorMessage = error.message;
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Password is incorrect';
+      } else if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please log out and log in again before deleting account';
+      }
+
+      return { success: false, error: errorMessage, code: error.code };
+    }
+  };
+
+  // Check if user is authenticated
+  const isAuthenticated = () => {
+    return !!currentUser;
+  };
+
+  // Check if user is a guide
   const isGuide = () => {
     return userProfile?.role === 'guide';
   };
 
-  // Check if user is traveler
+  // Check if user is a traveler
   const isTraveler = () => {
     return userProfile?.role === 'traveler';
   };
 
-  // Check if user is admin
-  const isAdmin = () => {
-    return userProfile?.role === 'admin';
-  };
-
-  // Check membership status
-  const checkMembershipStatus = () => {
-    if (!isGuide()) return null;
-
-    const now = new Date();
-    const endDate = userProfile?.membershipEndDate ? new Date(userProfile.membershipEndDate) : null;
-
-    if (!endDate) return 'expired';
-
-    if (now > endDate) {
-      return 'expired';
-    }
-
-    if (userProfile?.membershipStatus === 'trial' && userProfile?.isFirstYearFree) {
-      return 'trial';
-    }
-
-    return 'active';
-  };
-
-  // Monitor auth state changes
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        await fetchUserProfile(user.uid);
-      } else {
-        setCurrentUser(null);
-        setUserProfile(null);
+  // Get user's bookings
+  const getUserBookings = async () => {
+    try {
+      if (!currentUser) {
+        throw new Error('No user logged in');
       }
-      setLoading(false);
-    });
 
-    return () => unsubscribe();
-  }, []);
+      const bookingsQuery = query(
+        collection(db, 'bookings'),
+        where('userId', '==', currentUser.uid)
+      );
+
+      const snapshot = await getDocs(bookingsQuery);
+      const bookings = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return { success: true, bookings };
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Get user's favorites
+  const getUserFavorites = async () => {
+    try {
+      if (!currentUser) {
+        throw new Error('No user logged in');
+      }
+
+      const favoritesQuery = query(
+        collection(db, 'favorites'),
+        where('userId', '==', currentUser.uid)
+      );
+
+      const snapshot = await getDocs(favoritesQuery);
+      const favorites = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return { success: true, favorites };
+    } catch (error) {
+      console.error('Error fetching favorites:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Get user's reviews
+  const getUserReviews = async () => {
+    try {
+      if (!currentUser) {
+        throw new Error('No user logged in');
+      }
+
+      const reviewsQuery = query(
+        collection(db, 'reviews'),
+        where('userId', '==', currentUser.uid)
+      );
+
+      const snapshot = await getDocs(reviewsQuery);
+      const reviews = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return { success: true, reviews };
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
   const value = {
-  // State
-  currentUser,
-  userProfile,
-  loading,
-  authError,
-  currentPage,
-  setCurrentPage, // Simple version
-  
-  // Auth methods
-  register,
-  login,
-  logout,
-  resetPassword,
-  
-  // Profile methods
-  updateUserProfile,
-  uploadProfileImage,
-  uploadVerificationDocuments,
-  fetchUserProfile,
-  
-  // Helper methods
-  isGuide,
-  isTraveler,
-  isAdmin,
-  checkMembershipStatus,
-  
-  // Clear error
-  clearError,
-};
+    // State
+    currentUser,
+    userProfile,
+    loading,
+    authError,
+    
+    // Navigation state
+    currentPage,
+    setCurrentPage,
+
+    // Authentication methods
+    signup,
+    login,
+    signInWithGoogle,
+    logout,
+    resetPassword,
+    changePassword,
+    changeEmail,
+
+    // Profile management
+    updateUserProfile,
+    uploadProfileImage,
+    refreshUserProfile,
+    fetchUserProfile,
+
+    // Account management
+    deleteAccount,
+
+    // Utility methods
+    isAuthenticated,
+    isGuide,
+    isTraveler,
+
+    // Data fetching
+    getUserBookings,
+    getUserFavorites,
+    getUserReviews,
+  };
 
   return (
     <AuthContext.Provider value={value}>
