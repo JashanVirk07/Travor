@@ -1,14 +1,14 @@
-// src/pages/DestinationsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { tourService } from '../services/firestoreService';
+import { tourService, favoritesService } from '../services/firestoreService';
 import { COLORS } from '../utils/colors';
 
 const DestinationsPage = () => {
-  const { setCurrentPage } = useAuth();
+  const { setCurrentPage, currentUser } = useAuth();
   const [tours, setTours] = useState([]);
   const [filteredTours, setFilteredTours] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [favorites, setFavorites] = useState([]); // Track favorite IDs
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,6 +45,13 @@ const DestinationsPage = () => {
     }
   }, []);
 
+  // Load favorites when user is logged in
+  useEffect(() => {
+    if (currentUser) {
+      loadFavorites();
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     applyFilters();
   }, [tours, searchQuery, selectedCategory, selectedDifficulty, priceRange, sortBy]);
@@ -58,6 +65,34 @@ const DestinationsPage = () => {
       console.error('Error loading tours:', error);
     }
     setLoading(false);
+  };
+
+  const loadFavorites = async () => {
+    try {
+      const ids = await favoritesService.getUserFavoritesIds(currentUser.uid);
+      setFavorites(ids);
+    } catch (error) {
+      console.error('Error loading favorites:', error);
+    }
+  };
+
+  const handleToggleFavorite = async (e, tour) => {
+    e.stopPropagation(); // Prevent clicking the card behind the heart
+    if (!currentUser) {
+      alert("Please login to save favorites");
+      return;
+    }
+
+    const isFav = favorites.includes(tour.tourId);
+    
+    // Optimistic UI update
+    if (isFav) {
+      setFavorites(prev => prev.filter(id => id !== tour.tourId));
+      await favoritesService.removeFromFavorites(currentUser.uid, tour.tourId);
+    } else {
+      setFavorites(prev => [...prev, tour.tourId]);
+      await favoritesService.addToFavorites(currentUser.uid, tour);
+    }
   };
 
   const applyFilters = () => {
@@ -249,7 +284,17 @@ const DestinationsPage = () => {
                     alt={tour.title}
                     style={styles.tourImage}
                   />
+                  
+                  {/* NEW: Favorite Button */}
+                  <button 
+                    onClick={(e) => handleToggleFavorite(e, tour)}
+                    style={styles.favoriteButton}
+                  >
+                    {favorites.includes(tour.tourId) ? '❤️' : '🤍'}
+                  </button>
+
                   <div style={styles.categoryBadge}>{tour.category}</div>
+                  
                   {tour.averageRating && (
                     <div style={styles.ratingBadge}>
                       ⭐ {tour.averageRating.toFixed(1)}
@@ -400,6 +445,25 @@ const styles = {
     height: '100%',
     objectFit: 'cover',
   },
+  // New style for the Favorite Button
+  favoriteButton: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    background: 'rgba(255, 255, 255, 0.8)',
+    border: 'none',
+    borderRadius: '50%',
+    width: '36px',
+    height: '36px',
+    fontSize: '20px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    transition: 'transform 0.2s',
+  },
   categoryBadge: {
     position: 'absolute',
     top: '16px',
@@ -414,7 +478,7 @@ const styles = {
   },
   ratingBadge: {
     position: 'absolute',
-    top: '16px',
+    bottom: '16px', // Moved to bottom right to make room for heart
     right: '16px',
     background: 'white',
     padding: '6px 12px',

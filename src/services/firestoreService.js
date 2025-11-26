@@ -5,6 +5,7 @@ import {
     getDocs, 
     setDoc, 
     updateDoc, 
+    deleteDoc, // Added this
     query, 
     where, 
     orderBy, 
@@ -202,7 +203,7 @@ export const bookingService = {
         }
     },
 
-    // Get traveler bookings - NEW FUNCTION
+    // Get traveler bookings
     getTravelerBookings: async (travelerId) => {
         try {
             console.log('Fetching bookings for traveler:', travelerId);
@@ -220,7 +221,6 @@ export const bookingService = {
             return bookings;
         } catch (error) {
             console.error('Error fetching traveler bookings:', error);
-            // If the error is about missing index, return empty array
             if (error.message.includes('index')) {
                 console.warn('Firestore index needed. Please create the index in Firebase Console.');
                 return [];
@@ -680,4 +680,55 @@ export const paymentService = {
             return null;
         }
     },
+};
+
+// ============================================
+// FAVORITES SERVICE (NEW)
+// ============================================
+
+export const favoritesService = {
+    addToFavorites: async (userId, tour) => {
+        try {
+            // Using a composite ID (userId_tourId) ensures a user can't duplicate a favorite
+            const docId = `${userId}_${tour.tourId}`;
+            const docRef = doc(db, 'favorites', docId);
+
+            await setDoc(docRef, {
+                userId,
+                tourId: tour.tourId,
+                tourTitle: tour.title,
+                tourImage: tour.images?.[0] || null,
+                location: tour.location,
+                price: tour.price,
+                createdAt: serverTimestamp()
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("Error adding favorite:", error);
+            throw error;
+        }
+    },
+
+    removeFromFavorites: async (userId, tourId) => {
+        try {
+            const docId = `${userId}_${tourId}`;
+            const docRef = doc(db, 'favorites', docId);
+            await deleteDoc(docRef);
+            return { success: true };
+        } catch (error) {
+            console.error("Error removing favorite:", error);
+            throw error;
+        }
+    },
+
+    getUserFavoritesIds: async (userId) => {
+        try {
+            const q = query(collection(db, 'favorites'), where('userId', '==', userId));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => doc.data().tourId);
+        } catch (error) {
+            console.error("Error fetching favorites:", error);
+            return [];
+        }
+    }
 };

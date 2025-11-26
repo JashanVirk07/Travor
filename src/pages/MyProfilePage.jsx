@@ -15,10 +15,7 @@ const MyProfilePage = () => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Edit Profile Modal
   const [showEditModal, setShowEditModal] = useState(false);
-  
-  // Refund Modal
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [selectedBookingForRefund, setSelectedBookingForRefund] = useState(null);
 
@@ -34,7 +31,6 @@ const MyProfilePage = () => {
     setLoading(true);
 
     try {
-      // Fetch bookings
       const bookingsQuery = query(
         collection(db, 'bookings'),
         where('userId', '==', currentUser.uid)
@@ -56,7 +52,6 @@ const MyProfilePage = () => {
         }
       );
 
-      // Fetch favorites
       const favoritesQuery = query(
         collection(db, 'favorites'),
         where('userId', '==', currentUser.uid)
@@ -71,12 +66,9 @@ const MyProfilePage = () => {
           }));
           setFavorites(favoritesData);
         },
-        (error) => {
-          console.error('Error fetching favorites:', error);
-        }
+        (error) => { console.error('Error fetching favorites:', error); }
       );
 
-      // Fetch reviews
       const reviewsQuery = query(
         collection(db, 'reviews'),
         where('userId', '==', currentUser.uid)
@@ -91,9 +83,7 @@ const MyProfilePage = () => {
           }));
           setReviews(reviewsData);
         },
-        (error) => {
-          console.error('Error fetching reviews:', error);
-        }
+        (error) => { console.error('Error fetching reviews:', error); }
       );
 
       return () => {
@@ -112,13 +102,12 @@ const MyProfilePage = () => {
     setShowRefundModal(true);
   };
 
-  // Logic to handle chatting with the guide
   const handleChatWithGuide = (booking) => {
     sessionStorage.setItem('chatWithGuide', JSON.stringify({
       guideId: booking.guideId,
       guideName: booking.guideName,
       tourId: booking.tourId,
-      tourTitle: booking.tourTitle,
+      tourTitle: booking.tourTitle || booking.tour?.title,
     }));
     setCurrentPage('messages');
   };
@@ -134,19 +123,16 @@ const MyProfilePage = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'confirmed':
-        return '#10b981';
-      case 'pending':
-        return '#f59e0b';
-      case 'cancelled':
-        return '#ef4444';
-      default:
-        return '#666';
+      case 'confirmed': return '#10b981';
+      case 'pending': return '#f59e0b';
+      case 'cancelled': return '#ef4444';
+      default: return '#666';
     }
   };
 
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
+    // Handle both Firestore timestamp and string date
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -155,25 +141,28 @@ const MyProfilePage = () => {
     });
   };
 
-  // Get display name - prioritize name, then fullName, then fallback to 'User'
+  // Helper function to safely get image source
+  const getBookingImage = (booking) => {
+    if (booking.tourImage) return booking.tourImage;
+    if (booking.tour?.images?.[0]) return booking.tour.images[0];
+    if (booking.tourDetails?.images?.[0]) return booking.tourDetails.images[0];
+    // Reliable fallback image from Unsplash
+    return 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400';
+  };
+
   const displayName = userProfile?.name || userProfile?.fullName || 'User';
-  
-  // Get profile image URL or create placeholder with first letter of name
   const profileImageUrl = userProfile?.profileImageUrl;
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
   return (
     <div style={styles.container}>
-      {/* Profile Header Card */}
       <div style={styles.profileCard}>
         <div style={styles.profileHeader}>
           <div style={styles.profileInfo}>
             {profileImageUrl ? (
               <img src={profileImageUrl} alt={displayName} style={styles.avatar} />
             ) : (
-              <div style={styles.avatarPlaceholder}>
-                {avatarLetter}
-              </div>
+              <div style={styles.avatarPlaceholder}>{avatarLetter}</div>
             )}
             
             <div style={styles.userInfo}>
@@ -185,7 +174,6 @@ const MyProfilePage = () => {
             </div>
           </div>
 
-          {/* Edit Profile Button */}
           <button 
             onClick={() => setShowEditModal(true)}
             style={styles.editButton}
@@ -194,7 +182,6 @@ const MyProfilePage = () => {
           </button>
         </div>
 
-        {/* Additional Info for Guides */}
         {userProfile?.role === 'guide' && (
           <div style={styles.guideInfo}>
             {userProfile?.location && (
@@ -218,7 +205,6 @@ const MyProfilePage = () => {
           </div>
         )}
 
-        {/* Bio */}
         {userProfile?.bio && (
           <div style={styles.bioSection}>
             <p style={styles.bioText}>{userProfile.bio}</p>
@@ -226,38 +212,27 @@ const MyProfilePage = () => {
         )}
       </div>
 
-      {/* Tabs */}
       <div style={styles.tabs}>
         <button
           onClick={() => setActiveTab('bookings')}
-          style={{
-            ...styles.tab,
-            ...(activeTab === 'bookings' ? styles.activeTab : {}),
-          }}
+          style={{ ...styles.tab, ...(activeTab === 'bookings' ? styles.activeTab : {}) }}
         >
           📅 My Bookings
         </button>
         <button
           onClick={() => setActiveTab('favorites')}
-          style={{
-            ...styles.tab,
-            ...(activeTab === 'favorites' ? styles.activeTab : {}),
-          }}
+          style={{ ...styles.tab, ...(activeTab === 'favorites' ? styles.activeTab : {}) }}
         >
           ❤️ Favorites
         </button>
         <button
           onClick={() => setActiveTab('reviews')}
-          style={{
-            ...styles.tab,
-            ...(activeTab === 'reviews' ? styles.activeTab : {}),
-          }}
+          style={{ ...styles.tab, ...(activeTab === 'reviews' ? styles.activeTab : {}) }}
         >
           ⭐ My Reviews
         </button>
       </div>
 
-      {/* Content Area */}
       <div style={styles.content}>
         {loading ? (
           <div style={styles.loadingContainer}>
@@ -266,7 +241,6 @@ const MyProfilePage = () => {
           </div>
         ) : (
           <>
-            {/* My Bookings Tab */}
             {activeTab === 'bookings' && (
               <div style={styles.section}>
                 <h2 style={styles.sectionTitle}>My Bookings</h2>
@@ -287,9 +261,13 @@ const MyProfilePage = () => {
                       <div key={booking.id} style={styles.bookingCard}>
                         <div style={styles.bookingImageContainer}>
                           <img
-                            src={booking.tourImage || '/placeholder-tour.jpg'}
-                            alt={booking.tourTitle}
+                            src={getBookingImage(booking)}
+                            alt={booking.tourTitle || 'Tour'}
                             style={styles.bookingImage}
+                            onError={(e) => {
+                                e.target.onerror = null; 
+                                e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400';
+                            }}
                           />
                           <div
                             style={{
@@ -297,25 +275,26 @@ const MyProfilePage = () => {
                               background: getStatusColor(booking.status),
                             }}
                           >
-                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                            {booking.status ? (booking.status.charAt(0).toUpperCase() + booking.status.slice(1)) : 'Unknown'}
                           </div>
                         </div>
 
                         <div style={styles.bookingDetails}>
-                          <h3 style={styles.bookingTitle}>{booking.tourTitle}</h3>
+                          <h3 style={styles.bookingTitle}>{booking.tourTitle || booking.tour?.title || 'Tour Booking'}</h3>
 
                           <div style={styles.bookingInfo}>
                             <div style={styles.bookingInfoItem}>
                               <span style={styles.bookingIcon}>📍</span>
-                              <span>{booking.location}</span>
+                              <span>{booking.location || booking.tour?.location || 'Location N/A'}</span>
                             </div>
                             <div style={styles.bookingInfoItem}>
                               <span style={styles.bookingIcon}>📅</span>
-                              <span>{formatDate(booking.date)}</span>
+                              {/* Fix: Check startDate if date is missing */}
+                              <span>{formatDate(booking.date || booking.startDate)}</span>
                             </div>
                             <div style={styles.bookingInfoItem}>
                               <span style={styles.bookingIcon}>👥</span>
-                              <span>{booking.participants} participant{booking.participants > 1 ? 's' : ''}</span>
+                              <span>{booking.participants || booking.numberOfParticipants} participant{booking.participants > 1 ? 's' : ''}</span>
                             </div>
                             <div style={styles.bookingInfoItem}>
                               <span style={styles.bookingIcon}>💰</span>
@@ -329,7 +308,6 @@ const MyProfilePage = () => {
                             </div>
                           )}
 
-                          {/* Refund Badge */}
                           {booking.refundStatus === 'completed' && (
                             <div style={styles.refundBadge}>
                               ✅ Refunded: ${booking.refundAmount?.toFixed(2)}
@@ -338,13 +316,15 @@ const MyProfilePage = () => {
 
                           <div style={styles.bookingActions}>
                             <button
-                              onClick={() => setCurrentPage('tour-details')}
+                              onClick={() => {
+                                  sessionStorage.setItem('selectedTourId', booking.tourId || booking.tour?.tourId);
+                                  setCurrentPage('tour-details');
+                              }}
                               style={styles.viewButton}
                             >
                               View Tour
                             </button>
                             
-                            {/* Added Chat Button here */}
                             <button
                               onClick={() => handleChatWithGuide(booking)}
                               style={styles.chatButton}
@@ -369,7 +349,6 @@ const MyProfilePage = () => {
               </div>
             )}
 
-            {/* Favorites Tab */}
             {activeTab === 'favorites' && (
               <div style={styles.section}>
                 <h2 style={styles.sectionTitle}>Favorite Tours</h2>
@@ -389,7 +368,7 @@ const MyProfilePage = () => {
                     {favorites.map((favorite) => (
                       <div key={favorite.id} style={styles.favoriteCard}>
                         <img
-                          src={favorite.tourImage || '/placeholder-tour.jpg'}
+                          src={favorite.tourImage || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400'}
                           alt={favorite.tourTitle}
                           style={styles.favoriteImage}
                         />
@@ -398,7 +377,10 @@ const MyProfilePage = () => {
                           <p style={styles.favoriteLocation}>📍 {favorite.location}</p>
                           <p style={styles.favoritePrice}>💰 ${favorite.price}</p>
                           <button
-                            onClick={() => setCurrentPage('tour-details')}
+                            onClick={() => {
+                                sessionStorage.setItem('selectedTourId', favorite.tourId);
+                                setCurrentPage('tour-details');
+                            }}
                             style={styles.viewTourButton}
                           >
                             View Tour
@@ -411,7 +393,6 @@ const MyProfilePage = () => {
               </div>
             )}
 
-            {/* Reviews Tab */}
             {activeTab === 'reviews' && (
               <div style={styles.section}>
                 <h2 style={styles.sectionTitle}>My Reviews</h2>
@@ -447,17 +428,12 @@ const MyProfilePage = () => {
         )}
       </div>
 
-      {/* Edit Profile Modal */}
       <EditProfileModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        onSuccess={() => {
-          // Profile will auto-update via AuthContext
-          console.log('Profile updated successfully');
-        }}
+        onSuccess={() => console.log('Profile updated successfully')}
       />
 
-      {/* Refund Modal */}
       {showRefundModal && selectedBookingForRefund && (
         <RefundModal
           isOpen={showRefundModal}
@@ -466,6 +442,9 @@ const MyProfilePage = () => {
             setSelectedBookingForRefund(null);
           }}
           booking={selectedBookingForRefund}
+          onRefundSuccess={() => {
+             // You can add logic here to refresh bookings if needed
+          }}
         />
       )}
     </div>
