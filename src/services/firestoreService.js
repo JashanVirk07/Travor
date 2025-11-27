@@ -12,7 +12,7 @@ import {
     serverTimestamp, 
     addDoc,
     limit,
-    getCountFromServer // Added for admin stats if needed later
+    getCountFromServer 
 } from 'firebase/firestore';
 import { db } from '../firebase.js';
 
@@ -22,7 +22,7 @@ import { db } from '../firebase.js';
 export const notificationService = {
     sendNotification: async (userId, title, message, type = 'info') => {
         try {
-            if (!userId) return; // Safety check
+            if (!userId) return;
             const notifRef = collection(db, 'notifications');
             await addDoc(notifRef, {
                 userId,
@@ -132,12 +132,14 @@ export const tourService = {
             const querySnapshot = await getDocs(q);
             let tours = querySnapshot.docs.map(d => ({ tourId: d.id, ...d.data() }));
             
+            // Client-side sorting
             tours.sort((a, b) => {
                 const aTime = a.createdAt?.seconds || 0;
                 const bTime = b.createdAt?.seconds || 0;
                 return bTime - aTime;
             });
 
+            // Client-side filter for location
             if (filters.location) {
                 const locationTerm = filters.location.toLowerCase();
                 tours = tours.filter(t => (t.location || '').toLowerCase().includes(locationTerm));
@@ -331,7 +333,7 @@ export const bookingService = {
                 await notificationService.sendNotification(
                     bookingData.userId, 
                     "Booking Cancelled ❌",
-                    `Your booking for "${bookingData.tourTitle}" was cancelled by the guide.`,
+                    `Your booking for "${bookingData.tourTitle}" was cancelled.`,
                     "error"
                 );
             } else if (status === 'completed') {
@@ -350,7 +352,6 @@ export const bookingService = {
         }
     },
 
-    // UPDATED: Cancel Booking (Traveler Action)
     cancelBooking: async (bookingId) => {
         try {
             const bookingRef = doc(db, 'bookings', bookingId);
@@ -364,7 +365,7 @@ export const bookingService = {
                 updatedAt: serverTimestamp(),
             });
 
-            // NOTIFY GUIDE THAT TRAVELER CANCELLED
+            // NOTIFY GUIDE
             await notificationService.sendNotification(
                 bookingData.guideId,
                 "Booking Cancelled ⚠️",
@@ -378,6 +379,58 @@ export const bookingService = {
             throw error;
         }
     },
+
+    // NEW: Request Refund (Traveler Side)
+    requestRefund: async (bookingId, reason) => {
+        try {
+            const bookingRef = doc(db, 'bookings', bookingId);
+            await updateDoc(bookingRef, { 
+                status: 'refund_pending',
+                refundReason: reason,
+                updatedAt: serverTimestamp() 
+            });
+            return { success: true };
+        } catch (error) { 
+            console.error("Error requesting refund:", error); 
+            throw error; 
+        }
+    },
+
+    // NEW: Process Admin Refund
+    processAdminRefund: async (bookingId) => {
+        try {
+            const bookingRef = doc(db, 'bookings', bookingId);
+            const bookingSnap = await getDoc(bookingRef);
+            const bookingData = bookingSnap.data();
+
+            await updateDoc(bookingRef, { 
+                status: 'refunded',
+                refundStatus: 'completed',
+                refundedAt: serverTimestamp()
+            });
+
+            // Notify User
+            await notificationService.sendNotification(
+                bookingData.userId,
+                "Refund Approved 💰",
+                `Your refund of $${bookingData.totalPrice} for "${bookingData.tourTitle}" has been approved.`,
+                "success"
+            );
+
+            // Notify Guide
+            await notificationService.sendNotification(
+                bookingData.guideId,
+                "Refund Processed 💸",
+                `A refund for "${bookingData.tourTitle}" has been processed by Admin.`,
+                "warning"
+            );
+
+            return { success: true };
+        } catch (error) { 
+            console.error("Error processing admin refund:", error); 
+            throw error; 
+        }
+    }
 };
 
 // ============================================
@@ -505,7 +558,7 @@ export const reviewService = {
                 await reviewService.updateTourRating(booking.tourId);
             }
 
-            // UPDATED: NOTIFY GUIDE ABOUT NEW REVIEW
+            // NOTIFY GUIDE
             await notificationService.sendNotification(
                 reviewData.guideId,
                 "New Review! ⭐",
@@ -777,6 +830,28 @@ export const favoritesService = {
         } catch (error) {
             console.error("Error fetching favorites:", error);
             return [];
+        }
+    }
+    
+};
+
+// ... (keep all existing code above) ...
+
+
+// CONTACT SERVICE 
+export const contactService = {
+    submitInquiry: async (data) => {
+        try {
+            const inquiriesRef = collection(db, 'inquiries');
+            await addDoc(inquiriesRef, {
+                ...data,
+                status: 'open', // open, pending, resolved
+                createdAt: serverTimestamp(),
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("Error submitting inquiry:", error);
+            throw error;
         }
     }
 };

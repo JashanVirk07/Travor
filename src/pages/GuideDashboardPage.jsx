@@ -1,12 +1,12 @@
-// src/pages/GuideDashboardPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { tourService } from '../services/firestoreService';
+import { tourService, bookingService } from '../services/firestoreService'; // Added bookingService
 import { COLORS } from '../utils/colors';
 
 const GuideDashboardPage = () => {
   const { currentUser, userProfile, setCurrentPage } = useAuth();
   const [myTours, setMyTours] = useState([]);
+  const [myBookings, setMyBookings] = useState([]); // NEW: Track bookings
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -24,23 +24,40 @@ const GuideDashboardPage = () => {
 
   useEffect(() => {
     if (currentUser && userProfile?.role === 'guide') {
-      loadMyTours();
+      loadGuideData();
     }
   }, [currentUser, userProfile]);
 
-  const loadMyTours = async () => {
+  const loadGuideData = async () => {
     setLoading(true);
     try {
+      // Load Tours
       const tours = await tourService.getGuideTours(currentUser.uid);
       setMyTours(tours);
+
+      // Load Bookings (NEW)
+      const bookings = await bookingService.getGuideBookings(currentUser.uid);
+      setMyBookings(bookings);
     } catch (error) {
-      console.error('Error loading tours:', error);
+      console.error('Error loading dashboard data:', error);
     }
     setLoading(false);
   };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // NEW: Function to initiate chat with traveler
+  const handleMessageTraveler = (booking) => {
+      sessionStorage.setItem('chatWithGuide', JSON.stringify({
+          // When guide starts chat, 'guideId' logic in MessagesPage will be flipped 
+          // because the MessagesPage logic handles "Other User".
+          // So we pass the traveler's ID as the target.
+          guideId: booking.travelerId || booking.userId, 
+          guideName: booking.travelerName || 'Traveler'
+      }));
+      setCurrentPage('messages');
   };
 
   const handleSubmit = async (e) => {
@@ -70,7 +87,7 @@ const GuideDashboardPage = () => {
         meetingPoint: '',
         difficulty: 'easy',
       });
-      loadMyTours();
+      loadGuideData(); // Refresh both
     } catch (error) {
       console.error('Error creating tour:', error);
       alert('❌ Failed to create tour: ' + error.message);
@@ -122,153 +139,115 @@ const GuideDashboardPage = () => {
             </div>
           </div>
           <div style={styles.statCard}>
-            <div style={styles.statIcon}>✅</div>
+            <div style={styles.statIcon}>📅</div>
             <div>
-              <div style={styles.statNumber}>{userProfile?.toursCompleted || 0}</div>
-              <div style={styles.statLabel}>Completed Tours</div>
+              <div style={styles.statNumber}>{myBookings.length}</div>
+              <div style={styles.statLabel}>Total Bookings</div>
             </div>
           </div>
         </div>
 
+        {/* Create Tour Form */}
         {showCreateForm && (
           <div style={styles.formContainer}>
             <h2 style={styles.formTitle}>Create New Tour</h2>
             <form onSubmit={handleSubmit} style={styles.form}>
               <div style={styles.formGroup}>
                 <label style={styles.label}>Tour Title *</label>
-                <input
-                  type="text"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  required
-                  style={styles.input}
-                  placeholder="e.g., Hidden Gems of Barcelona"
-                />
+                <input type="text" name="title" value={formData.title} onChange={handleChange} required style={styles.input} placeholder="e.g., Hidden Gems of Barcelona" />
               </div>
-
               <div style={styles.formGroup}>
                 <label style={styles.label}>Description *</label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  required
-                  rows="4"
-                  style={styles.textarea}
-                  placeholder="Describe your tour experience..."
-                />
+                <textarea name="description" value={formData.description} onChange={handleChange} required rows="4" style={styles.textarea} placeholder="Describe your tour experience..." />
               </div>
-
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Location *</label>
-                  <input
-                    type="text"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleChange}
-                    required
-                    style={styles.input}
-                    placeholder="City, Country"
-                  />
+                  <input type="text" name="location" value={formData.location} onChange={handleChange} required style={styles.input} placeholder="City, Country" />
                 </div>
-
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Price (USD) *</label>
-                  <input
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleChange}
-                    required
-                    min="0"
-                    style={styles.input}
-                    placeholder="50"
-                  />
+                  <input type="number" name="price" value={formData.price} onChange={handleChange} required min="0" style={styles.input} placeholder="50" />
                 </div>
               </div>
-
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Duration *</label>
-                  <input
-                    type="text"
-                    name="duration"
-                    value={formData.duration}
-                    onChange={handleChange}
-                    required
-                    style={styles.input}
-                    placeholder="e.g., 3 hours"
-                  />
+                  <input type="text" name="duration" value={formData.duration} onChange={handleChange} required style={styles.input} placeholder="e.g., 3 hours" />
                 </div>
-
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Max Participants *</label>
-                  <input
-                    type="number"
-                    name="maxParticipants"
-                    value={formData.maxParticipants}
-                    onChange={handleChange}
-                    required
-                    min="1"
-                    style={styles.input}
-                    placeholder="10"
-                  />
+                  <input type="number" name="maxParticipants" value={formData.maxParticipants} onChange={handleChange} required min="1" style={styles.input} placeholder="10" />
                 </div>
               </div>
-
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Category *</label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    style={styles.input}
-                  >
+                  <select name="category" value={formData.category} onChange={handleChange} style={styles.input}>
                     <option value="city">City Breaks</option>
                     <option value="beach">Beach & Island</option>
                     <option value="mountain">Mountain Treks</option>
                     <option value="cultural">Cultural Heritage</option>
                   </select>
                 </div>
-
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Difficulty *</label>
-                  <select
-                    name="difficulty"
-                    value={formData.difficulty}
-                    onChange={handleChange}
-                    style={styles.input}
-                  >
+                  <select name="difficulty" value={formData.difficulty} onChange={handleChange} style={styles.input}>
                     <option value="easy">Easy</option>
                     <option value="moderate">Moderate</option>
                     <option value="challenging">Challenging</option>
                   </select>
                 </div>
               </div>
-
               <div style={styles.formGroup}>
                 <label style={styles.label}>Meeting Point *</label>
-                <input
-                  type="text"
-                  name="meetingPoint"
-                  value={formData.meetingPoint}
-                  onChange={handleChange}
-                  required
-                  style={styles.input}
-                  placeholder="e.g., Main Square, City Center"
-                />
+                <input type="text" name="meetingPoint" value={formData.meetingPoint} onChange={handleChange} required style={styles.input} placeholder="e.g., Main Square, City Center" />
               </div>
-
-              <button type="submit" style={styles.submitButton}>
-                Create Tour
-              </button>
+              <button type="submit" style={styles.submitButton}>Create Tour</button>
             </form>
           </div>
         )}
 
+        {/* NEW: Recent Bookings Section */}
+        <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Recent Bookings</h2>
+            {myBookings.length === 0 ? (
+                <div style={styles.emptyState}>
+                    <p style={styles.emptyText}>No bookings yet.</p>
+                </div>
+            ) : (
+                <div style={styles.bookingsGrid}>
+                    {myBookings.map(booking => (
+                        <div key={booking.bookingId} style={styles.bookingCard}>
+                            <div style={styles.bookingHeader}>
+                                <h3 style={styles.bookingTitle}>{booking.tourTitle}</h3>
+                                <span style={{
+                                    ...styles.statusBadge, 
+                                    background: booking.status === 'confirmed' ? '#d1fae5' : '#fff3cd',
+                                    color: booking.status === 'confirmed' ? '#065f46' : '#856404'
+                                }}>
+                                    {booking.status}
+                                </span>
+                            </div>
+                            <div style={styles.bookingDetails}>
+                                <p><strong>Traveler:</strong> {booking.travelerName || 'User'}</p>
+                                <p><strong>Date:</strong> {booking.startDate?.toDate ? booking.startDate.toDate().toLocaleDateString() : booking.startDate}</p>
+                                <p><strong>Guests:</strong> {booking.numberOfParticipants}</p>
+                            </div>
+                            {/* NEW BUTTON: Message Traveler */}
+                            <button 
+                                onClick={() => handleMessageTraveler(booking)} 
+                                style={styles.messageButton}
+                            >
+                                💬 Message Traveler
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+
+        {/* Existing Tours Section */}
         <div style={styles.toursSection}>
           <h2 style={styles.sectionTitle}>My Tours ({myTours.length})</h2>
           {loading ? (
@@ -440,6 +419,55 @@ const styles = {
     marginTop: '20px',
     transition: 'all 0.3s',
   },
+  // Bookings Section Styles
+  bookingsGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+      gap: '20px',
+      marginTop: '20px'
+  },
+  bookingCard: {
+      background: 'white',
+      padding: '20px',
+      borderRadius: '12px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+      border: `1px solid ${COLORS.border}`
+  },
+  bookingHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '12px'
+  },
+  bookingTitle: {
+      fontSize: '16px',
+      fontWeight: 'bold',
+      color: '#333'
+  },
+  statusBadge: {
+      padding: '4px 8px',
+      borderRadius: '4px',
+      fontSize: '12px',
+      fontWeight: '600'
+  },
+  bookingDetails: {
+      fontSize: '14px',
+      color: '#666',
+      lineHeight: '1.6',
+      marginBottom: '16px'
+  },
+  messageButton: {
+      width: '100%',
+      padding: '10px',
+      background: 'white',
+      border: `1px solid ${COLORS.primary}`,
+      color: COLORS.primary,
+      borderRadius: '8px',
+      cursor: 'pointer',
+      fontWeight: '600',
+      transition: '0.2s'
+  },
+  // Existing styles
   toursSection: {
     marginTop: '40px',
   },

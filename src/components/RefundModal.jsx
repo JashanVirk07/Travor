@@ -1,5 +1,7 @@
+// ... existing imports ...
 import React, { useState, useEffect } from 'react';
 import { enhancedPaymentService } from '../services/paymentService';
+import { bookingService } from '../services/firestoreService'; // Import bookingService for request logic
 import { COLORS } from '../utils/colors';
 
 const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
@@ -8,7 +10,6 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
   const [refundReason, setRefundReason] = useState('');
   const [error, setError] = useState(null);
 
-  // FIX: Safely get the ID. The profile page usually sets 'id', but services often look for 'bookingId'
   const validBookingId = booking?.id || booking?.bookingId;
 
   useEffect(() => {
@@ -23,7 +24,6 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
         setError('Invalid Booking ID');
         return;
       }
-      // Use validBookingId instead of booking.bookingId
       const result = await enhancedPaymentService.checkRefundEligibility(validBookingId);
       setEligibility(result);
     } catch (error) {
@@ -32,6 +32,7 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
     }
   };
 
+  // === UPDATED: Submit Request instead of Refund ===
   const handleRefund = async () => {
     if (!refundReason.trim()) {
       setError('Please provide a reason for cancellation');
@@ -42,18 +43,15 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
     setError(null);
 
     try {
-      // Use validBookingId instead of booking.bookingId
-      const result = await enhancedPaymentService.processRefund(
-        validBookingId,
-        refundReason
-      );
+      // Use bookingService to request refund (status -> refund_pending)
+      await bookingService.requestRefund(validBookingId, refundReason);
 
-      alert(`✅ ${result.message}`);
+      alert('✅ Refund request submitted for Admin approval.');
       onRefundSuccess();
       onClose();
     } catch (err) {
       console.error('Refund error:', err);
-      setError(err.message || 'Failed to process refund');
+      setError(err.message || 'Failed to submit refund request');
     } finally {
       setLoading(false);
     }
@@ -151,7 +149,7 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
 
               <div style={styles.warningBox}>
                 <strong>⚠️ Important:</strong>
-                <p>This action cannot be undone. The refund will be processed to your original payment method within 5-10 business days.</p>
+                <p>This request must be approved by an Admin. The refund will be processed to your original payment method within 5-10 business days after approval.</p>
               </div>
 
               <div style={styles.actions}>
@@ -167,7 +165,7 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
                   disabled={loading}
                   style={styles.refundButton}
                 >
-                  {loading ? 'Processing...' : 'Confirm Refund'}
+                  {loading ? 'Submitting...' : 'Submit Request'}
                 </button>
               </div>
             </>
@@ -189,200 +187,33 @@ const RefundModal = ({ isOpen, onClose, booking, onRefundSuccess }) => {
 };
 
 const styles = {
-  overlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: 'rgba(0, 0, 0, 0.6)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2000,
-    padding: '20px',
-  },
-  modal: {
-    background: 'white',
-    borderRadius: '16px',
-    maxWidth: '600px',
-    width: '100%',
-    maxHeight: '90vh',
-    overflow: 'auto',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '24px',
-    borderBottom: `1px solid ${COLORS.border}`,
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: '#333',
-    margin: 0,
-  },
-  closeButton: {
-    background: 'transparent',
-    border: 'none',
-    fontSize: '24px',
-    color: '#666',
-    cursor: 'pointer',
-    padding: '0',
-    width: '32px',
-    height: '32px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  content: {
-    padding: '24px',
-  },
-  bookingInfo: {
-    padding: '20px',
-    background: COLORS.light,
-    borderRadius: '12px',
-    marginBottom: '24px',
-  },
-  tourTitle: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: '16px',
-  },
-  bookingDetails: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  detailRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '14px',
-    color: '#666',
-  },
-  eligibleBox: {
-    padding: '20px',
-    background: '#f0fdf4',
-    border: '2px solid #22c55e',
-    borderRadius: '12px',
-    marginBottom: '24px',
-  },
-  ineligibleBox: {
-    padding: '20px',
-    background: '#fef2f2',
-    border: '2px solid #ef4444',
-    borderRadius: '12px',
-    marginBottom: '24px',
-  },
-  eligibilityTitle: {
-    fontSize: '18px',
-    fontWeight: 'bold',
-    marginBottom: '16px',
-  },
-  refundDetails: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    marginBottom: '16px',
-  },
-  refundRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '14px',
-  },
-  refundAmount: {
-    fontSize: '20px',
-    fontWeight: 'bold',
-    color: '#22c55e',
-  },
-  policyText: {
-    fontSize: '14px',
-    color: '#166534',
-    margin: 0,
-  },
-  ineligibleReason: {
-    fontSize: '14px',
-    color: '#991b1b',
-    margin: 0,
-  },
-  formGroup: {
-    marginBottom: '24px',
-  },
-  label: {
-    display: 'block',
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: '8px',
-  },
-  textarea: {
-    width: '100%',
-    padding: '12px',
-    border: `2px solid ${COLORS.border}`,
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    outline: 'none',
-    resize: 'vertical',
-  },
-  errorBox: {
-    padding: '12px',
-    background: '#fee',
-    border: `1px solid ${COLORS.danger}`,
-    borderRadius: '8px',
-    color: COLORS.danger,
-    fontSize: '14px',
-    marginBottom: '16px',
-  },
-  warningBox: {
-    padding: '16px',
-    background: '#fffbeb',
-    border: '1px solid #f59e0b',
-    borderRadius: '8px',
-    marginBottom: '24px',
-    fontSize: '14px',
-    color: '#92400e',
-  },
-  actions: {
-    display: 'flex',
-    gap: '12px',
-  },
-  cancelButton: {
-    flex: 1,
-    padding: '14px',
-    background: 'white',
-    border: `2px solid ${COLORS.border}`,
-    color: '#666',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  refundButton: {
-    flex: 1,
-    padding: '14px',
-    background: '#ef4444',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  closeOnlyButton: {
-    width: '100%',
-    padding: '14px',
-    background: COLORS.primary,
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
+  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px' },
+  modal: { background: 'white', borderRadius: '16px', maxWidth: '600px', width: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px', borderBottom: `1px solid ${COLORS.border}` },
+  title: { fontSize: '24px', fontWeight: 'bold', color: '#333', margin: 0 },
+  closeButton: { background: 'transparent', border: 'none', fontSize: '24px', color: '#666', cursor: 'pointer', padding: '0', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  content: { padding: '24px' },
+  bookingInfo: { padding: '20px', background: COLORS.light, borderRadius: '12px', marginBottom: '24px' },
+  tourTitle: { fontSize: '18px', fontWeight: '600', color: '#333', marginBottom: '16px' },
+  bookingDetails: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  detailRow: { display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#666' },
+  eligibleBox: { padding: '20px', background: '#f0fdf4', border: '2px solid #22c55e', borderRadius: '12px', marginBottom: '24px' },
+  ineligibleBox: { padding: '20px', background: '#fef2f2', border: '2px solid #ef4444', borderRadius: '12px', marginBottom: '24px' },
+  eligibilityTitle: { fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' },
+  refundDetails: { display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' },
+  refundRow: { display: 'flex', justifyContent: 'space-between', fontSize: '14px' },
+  refundAmount: { fontSize: '20px', fontWeight: 'bold', color: '#22c55e' },
+  policyText: { fontSize: '14px', color: '#166534', margin: 0 },
+  ineligibleReason: { fontSize: '14px', color: '#991b1b', margin: 0 },
+  formGroup: { marginBottom: '24px' },
+  label: { display: 'block', fontSize: '14px', fontWeight: '600', color: '#333', marginBottom: '8px' },
+  textarea: { width: '100%', padding: '12px', border: `2px solid ${COLORS.border}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', outline: 'none', resize: 'vertical' },
+  errorBox: { padding: '12px', background: '#fee', border: `1px solid ${COLORS.danger}`, borderRadius: '8px', color: COLORS.danger, fontSize: '14px', marginBottom: '16px' },
+  warningBox: { padding: '16px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', marginBottom: '24px', fontSize: '14px', color: '#92400e' },
+  actions: { display: 'flex', gap: '12px' },
+  cancelButton: { flex: 1, padding: '14px', background: 'white', border: `2px solid ${COLORS.border}`, color: '#666', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer' },
+  refundButton: { flex: 1, padding: '14px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer' },
+  closeOnlyButton: { width: '100%', padding: '14px', background: COLORS.primary, color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer' },
 };
 
 export default RefundModal;
