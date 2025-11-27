@@ -22,6 +22,8 @@ const Footer = () => {
     support: [
       { label: 'Help Center', page: 'about' },
       { label: 'Safety', page: 'about' },
+      // UPDATED: Points to the new contact page
+      { label: 'Contact Us', page: 'contact' }, 
       { label: 'Terms of Service', page: 'about' },
       { label: 'Privacy Policy', page: 'about' },
     ],

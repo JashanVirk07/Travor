@@ -1,4 +1,3 @@
-// src/pages/MessagesPage.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { messageService, guideService } from '../services/firestoreService';
@@ -20,11 +19,11 @@ const MessagesPage = () => {
     if (currentUser) {
       loadConversations();
       
-      // Check if coming from "Contact Guide" button
+      // Check if coming from "Contact Guide" (or "Message Traveler") button
       const chatInfo = sessionStorage.getItem('chatWithGuide');
       if (chatInfo) {
         const { guideId, guideName } = JSON.parse(chatInfo);
-        startConversationWithGuide(guideId, guideName);
+        startConversationWithUser(guideId, guideName);
         sessionStorage.removeItem('chatWithGuide');
       }
     }
@@ -49,26 +48,25 @@ const MessagesPage = () => {
     try {
       const convos = await messageService.getUserConversations(currentUser.uid);
       
-      // Load participant details for each conversation
       const convosWithDetails = await Promise.all(
         convos.map(async (convo) => {
           const otherUserId = convo.participants.find(id => id !== currentUser.uid);
           try {
-            // Try to get guide profile first
+            // Try to get guide profile, if not found (it's a traveler), create basic object
             let otherUser = await guideService.getGuideProfile(otherUserId);
             
-            // If not a guide, it's a traveler (you can add a traveler service if needed)
             if (!otherUser) {
+              // Ideally you'd fetch traveler profile, but for now fallback
               otherUser = { 
                 guideId: otherUserId, 
-                fullName: 'User',
+                userId: otherUserId, // Add this for clarity
+                fullName: 'User', // If you have a userService, use it here
                 profileImageUrl: null 
               };
             }
             
             return { ...convo, otherUser };
           } catch (error) {
-            console.error('Error loading user details:', error);
             return { ...convo, otherUser: { fullName: 'User', profileImageUrl: null } };
           }
         })
@@ -81,18 +79,19 @@ const MessagesPage = () => {
     setLoading(false);
   };
 
-  const startConversationWithGuide = async (guideId, guideName) => {
+  const startConversationWithUser = async (otherUserId, otherUserName) => {
     try {
       const conversationId = await messageService.getOrCreateConversation(
         currentUser.uid,
-        guideId
+        otherUserId
       );
       
-      const guide = await guideService.getGuideProfile(guideId);
+      // Try fetching guide profile, or fallback for traveler
+      const guide = await guideService.getGuideProfile(otherUserId);
       
       setSelectedConversation({
         conversationId,
-        otherUser: guide || { fullName: guideName, profileImageUrl: null },
+        otherUser: guide || { userId: otherUserId, fullName: otherUserName, profileImageUrl: null },
       });
     } catch (error) {
       console.error('Error starting conversation:', error);
@@ -101,7 +100,6 @@ const MessagesPage = () => {
 
   const loadMessages = async (conversationId) => {
     try {
-      // Set up real-time listener for messages
       const messagesRef = collection(db, 'conversations', conversationId, 'messages');
       const q = query(messagesRef, orderBy('timestamp', 'asc'));
       
@@ -113,7 +111,6 @@ const MessagesPage = () => {
         setMessages(msgs);
       });
 
-      // Return cleanup function
       return unsubscribe;
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -146,24 +143,13 @@ const MessagesPage = () => {
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     const now = new Date();
     const diffInHours = (now - date) / (1000 * 60 * 60);
 
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-    } else if (diffInHours < 48) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    }
+    if (diffInHours < 24) return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    else if (diffInHours < 48) return 'Yesterday';
+    else return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   if (!currentUser) {
@@ -196,7 +182,7 @@ const MessagesPage = () => {
                 <div style={styles.emptyIcon}>💬</div>
                 <p style={styles.emptyText}>No conversations yet</p>
                 <p style={styles.emptySubtext}>
-                  Start a conversation by contacting a guide from a tour page
+                  Start a conversation from a booking or tour page
                 </p>
               </div>
             ) : (
@@ -248,6 +234,15 @@ const MessagesPage = () => {
           <div style={styles.messagesArea}>
             {selectedConversation ? (
               <>
+                {/* NEW: Safety Disclaimer Banner */}
+                <div style={styles.safetyBanner}>
+                    <span style={{fontSize:'18px', marginRight:'8px'}}>🛡️</span>
+                    <span>
+                        <strong>Safety Notice:</strong> Do not share financial details or passwords. 
+                        Payments outside Travor are not protected and violate our terms.
+                    </span>
+                </div>
+
                 {/* Chat Header */}
                 <div style={styles.chatHeader}>
                   <div style={styles.chatHeaderInfo}>
@@ -450,6 +445,16 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
+  },
+  // NEW: Safety Banner Style
+  safetyBanner: {
+      background: '#fff3cd',
+      color: '#856404',
+      padding: '12px 20px',
+      fontSize: '13px',
+      borderBottom: '1px solid #ffeeba',
+      display: 'flex',
+      alignItems: 'center'
   },
   chatHeader: {
     padding: '20px 24px',
