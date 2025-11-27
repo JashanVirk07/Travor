@@ -103,19 +103,19 @@ describe('Tour & Review Integration Flow', () => {
   test('Guide creates tour -> Dashboard shows it -> user adds review -> DestinationsPage shows review', async () => {
     let tourId;
 
-    // 1️⃣ Submit tour
+    // Submit tour
     render(<CreateTourModal onSubmit={async (tour) => { const doc = await addDoc('tours', tour); tourId = doc.id; }} />);
     fireEvent.click(screen.getByTestId('submit-tour'));
 
-    // 2️⃣ Check if the Dashboard displays the tour
+    // Check if the Dashboard displays the tour
     render(<GuideDashboard />);
     await waitFor(() => expect(screen.getByText('Test Tour')).toBeInTheDocument());
 
-    // 3️⃣ Submit a review for the created tour
+    // Submit a review for the created tour
     render(<ReviewModal tourId={tourId} onSubmit={async (review) => addDoc('reviews', review)} />);
     fireEvent.click(screen.getByTestId('submit-review'));
 
-    // 4️⃣ Check if the DestinationsPage displays the review
+    // Check if the DestinationsPage displays the review
     render(<DestinationsPage tourId={tourId} />);
     await waitFor(() => expect(screen.getByText('Great tour!')).toBeInTheDocument());
   });
