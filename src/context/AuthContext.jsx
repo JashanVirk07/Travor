@@ -1,4 +1,3 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   createUserWithEmailAndPassword,
@@ -24,7 +23,6 @@ import {
   query,
   where,
   getDocs,
-  onSnapshot,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
@@ -67,6 +65,11 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
+  // --- NEW FUNCTION: Clear Errors ---
+  const clearError = () => {
+    setAuthError(null);
+  };
+
   // Fetch user profile from Firestore
   const fetchUserProfile = async (uid) => {
     try {
@@ -86,16 +89,44 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Sign up new user with email and password
-  const signup = async (email, password, userData) => {
+  // === NEW HELPER: Internal Upload Function for Registration ===
+  const uploadFile = async (file, path) => {
+    if (!file) return null;
+    try {
+        const storageRef = ref(storage, path);
+        const snapshot = await uploadBytes(storageRef, file);
+        return await getDownloadURL(snapshot.ref);
+    } catch (error) {
+        console.error("File upload error:", error);
+        throw error;
+    }
+  };
+
+  // === UPDATED SIGNUP (Handles Files & Membership) ===
+  const signup = async (email, password, userData, files = {}) => {
     try {
       setAuthError(null);
 
-      // Create authentication user
+      // 1. Create Auth User
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Create user profile in Firestore
+      // 2. Upload Files (Profile, GovID, License)
+      let profileImageUrl = '';
+      let govIdUrl = '';
+      let licenseUrl = '';
+
+      if (files.profileImage) {
+        profileImageUrl = await uploadFile(files.profileImage, `profile-images/${user.uid}_profile`);
+      }
+      if (files.govId) {
+        govIdUrl = await uploadFile(files.govId, `verification/${user.uid}_govId`);
+      }
+      if (files.license) {
+        licenseUrl = await uploadFile(files.license, `verification/${user.uid}_license`);
+      }
+
+      // 3. Create User Profile
       const userProfileData = {
         email: user.email,
         name: userData.name || userData.fullName || '',
@@ -105,8 +136,18 @@ export const AuthProvider = ({ children }) => {
         location: userData.location || '',
         bio: userData.bio || '',
         languages: userData.languages || [],
-        profileImageUrl: userData.profileImageUrl || '',
+        
+        // Images & Verification
+        profileImageUrl: profileImageUrl || '',
+        verificationDocuments: {
+            govIdUrl: govIdUrl || '',
+            licenseUrl: licenseUrl || '',
+            submittedAt: new Date()
+        },
+        certifications: [], // Initialize array for optional certs
+        
         isEmailVerified: false,
+        isVerified: false, // Guides start unverified
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -114,6 +155,32 @@ export const AuthProvider = ({ children }) => {
       };
 
       await setDoc(doc(db, 'users', user.uid), userProfileData);
+      
+      // If Guide, sync to 'guides' collection
+      if (userData.role === 'guide') {
+          await setDoc(doc(db, 'guides', user.uid), {
+              ...userProfileData,
+              userId: user.uid,
+              rating: 0,
+              reviewCount: 0
+          });
+
+          // === NEW: Create Membership Record (1 Year Free) ===
+          const oneYearFromNow = new Date();
+          oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+
+          await setDoc(doc(db, 'memberships', user.uid), {
+              userId: user.uid,
+              status: 'active',
+              plan: 'annual',
+              type: 'trial', // Free trial
+              startDate: new Date(),
+              expiresAt: oneYearFromNow,
+              amountPaid: 0,
+              autoRenew: false
+          });
+      }
+
       setUserProfile({ id: user.uid, ...userProfileData });
 
       return { success: true, user, profile: userProfileData };
@@ -156,6 +223,8 @@ export const AuthProvider = ({ children }) => {
         errorMessage = 'This account has been disabled';
       } else if (error.code === 'auth/too-many-requests') {
         errorMessage = 'Too many failed attempts. Please try again later';
+      } else if (error.code === 'auth/invalid-credential') {
+        errorMessage = 'Invalid email or password';
       }
 
       return { success: false, error: errorMessage, code: error.code };
@@ -449,6 +518,12 @@ export const AuthProvider = ({ children }) => {
       const userRef = doc(db, 'users', currentUser.uid);
       await updateDoc(userRef, updateData);
 
+      // Sync guides collection if guide
+      if (userProfile?.role === 'guide') {
+          const guideRef = doc(db, 'guides', currentUser.uid);
+          try { await updateDoc(guideRef, updateData); } catch(e) { console.log("Guide sync error", e); }
+      }
+
       // Update local state
       setUserProfile((prev) => ({
         ...prev,
@@ -628,6 +703,7 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     changePassword,
     changeEmail,
+    clearError,
 
     // Profile management
     updateUserProfile,

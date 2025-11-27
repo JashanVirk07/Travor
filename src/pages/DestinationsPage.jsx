@@ -1,14 +1,15 @@
-// src/pages/DestinationsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { tourService } from '../services/firestoreService';
+import { tourService, favoritesService } from '../services/firestoreService';
 import { COLORS } from '../utils/colors';
 
 const DestinationsPage = () => {
-  const { setCurrentPage } = useAuth();
+  const { setCurrentPage, currentUser } = useAuth();
   const [tours, setTours] = useState([]);
   const [filteredTours, setFilteredTours] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [favorites, setFavorites] = useState([]);
+  const [hoveredCard, setHoveredCard] = useState(null); // For hover effects
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,247 +30,163 @@ const DestinationsPage = () => {
 
   useEffect(() => {
     loadTours();
-    
-    // Check for search query from home page
     const storedQuery = sessionStorage.getItem('searchQuery');
-    if (storedQuery) {
-      setSearchQuery(storedQuery);
-      sessionStorage.removeItem('searchQuery');
-    }
-
-    // Check for category from home page
+    if (storedQuery) { setSearchQuery(storedQuery); sessionStorage.removeItem('searchQuery'); }
     const storedCategory = sessionStorage.getItem('selectedCategory');
-    if (storedCategory) {
-      setSelectedCategory(storedCategory);
-      sessionStorage.removeItem('selectedCategory');
-    }
+    if (storedCategory) { setSelectedCategory(storedCategory); sessionStorage.removeItem('selectedCategory'); }
   }, []);
 
-  useEffect(() => {
-    applyFilters();
-  }, [tours, searchQuery, selectedCategory, selectedDifficulty, priceRange, sortBy]);
+  useEffect(() => { if (currentUser) loadFavorites(); }, [currentUser]);
+  useEffect(() => { applyFilters(); }, [tours, searchQuery, selectedCategory, selectedDifficulty, priceRange, sortBy]);
 
   const loadTours = async () => {
     setLoading(true);
-    try {
-      const allTours = await tourService.getAllTours();
-      setTours(allTours);
-    } catch (error) {
-      console.error('Error loading tours:', error);
-    }
+    try { const allTours = await tourService.getAllTours(); setTours(allTours); } catch (error) { console.error('Error loading tours:', error); }
     setLoading(false);
+  };
+
+  const loadFavorites = async () => {
+    try { const ids = await favoritesService.getUserFavoritesIds(currentUser.uid); setFavorites(ids); } catch (error) { console.error('Error loading favorites:', error); }
+  };
+
+  const handleToggleFavorite = async (e, tour) => {
+    e.stopPropagation();
+    if (!currentUser) { alert("Please login to save favorites"); return; }
+    const isFav = favorites.includes(tour.tourId);
+    if (isFav) {
+      setFavorites(prev => prev.filter(id => id !== tour.tourId));
+      await favoritesService.removeFromFavorites(currentUser.uid, tour.tourId);
+    } else {
+      setFavorites(prev => [...prev, tour.tourId]);
+      await favoritesService.addToFavorites(currentUser.uid, tour);
+    }
   };
 
   const applyFilters = () => {
     let filtered = [...tours];
-
-    // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (tour) =>
-          tour.title?.toLowerCase().includes(query) ||
-          tour.location?.toLowerCase().includes(query) ||
-          tour.description?.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter(tour => tour.title?.toLowerCase().includes(query) || tour.location?.toLowerCase().includes(query) || tour.description?.toLowerCase().includes(query));
     }
-
-    // Category filter
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(
-        (tour) => tour.category?.toLowerCase() === selectedCategory.toLowerCase()
-      );
-    }
-
-    // Difficulty filter
-    if (selectedDifficulty !== 'all') {
-      filtered = filtered.filter(
-        (tour) => tour.difficulty?.toLowerCase() === selectedDifficulty.toLowerCase()
-      );
-    }
-
-    // Price filter
+    if (selectedCategory !== 'all') filtered = filtered.filter(tour => tour.category?.toLowerCase() === selectedCategory.toLowerCase());
+    if (selectedDifficulty !== 'all') filtered = filtered.filter(tour => tour.difficulty?.toLowerCase() === selectedDifficulty.toLowerCase());
     if (priceRange !== 'all') {
-      if (priceRange === '200+') {
-        filtered = filtered.filter((tour) => tour.price >= 200);
-      } else {
-        const [min, max] = priceRange.split('-').map(Number);
-        filtered = filtered.filter((tour) => tour.price >= min && tour.price <= max);
-      }
+      if (priceRange === '200+') filtered = filtered.filter(tour => tour.price >= 200);
+      else { const [min, max] = priceRange.split('-').map(Number); filtered = filtered.filter(tour => tour.price >= min && tour.price <= max); }
     }
-
-    // Sorting
     switch (sortBy) {
-      case 'price-low':
-        filtered.sort((a, b) => a.price - b.price);
-        break;
-      case 'price-high':
-        filtered.sort((a, b) => b.price - a.price);
-        break;
-      case 'rating':
-        filtered.sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
-        break;
-      case 'popular':
-        filtered.sort((a, b) => (b.totalReviews || 0) - (a.totalReviews || 0));
-        break;
-      default:
-        // Featured - keep original order
-        break;
+      case 'price-low': filtered.sort((a, b) => a.price - b.price); break;
+      case 'price-high': filtered.sort((a, b) => b.price - a.price); break;
+      case 'rating': filtered.sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0)); break;
+      case 'popular': filtered.sort((a, b) => (b.totalReviews || 0) - (a.totalReviews || 0)); break;
+      default: break;
     }
-
     setFilteredTours(filtered);
   };
 
-  const clearFilters = () => {
-    setSearchQuery('');
-    setSelectedCategory('all');
-    setSelectedDifficulty('all');
-    setPriceRange('all');
-    setSortBy('featured');
-  };
+  const clearFilters = () => { setSearchQuery(''); setSelectedCategory('all'); setSelectedDifficulty('all'); setPriceRange('all'); setSortBy('featured'); };
 
-  if (loading) {
-    return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.loader}>Loading tours...</div>
-      </div>
-    );
-  }
+  if (loading) return <div style={styles.loadingContainer}><div style={styles.loader}>Loading tours...</div></div>;
 
   return (
     <div style={styles.page}>
+      {/* HERO SECTION */}
+      <div style={styles.hero}>
+        <div style={styles.heroBackground} />
+        <div style={styles.heroOverlay} />
+        <div style={styles.heroContent}>
+            <span style={styles.badge}>Discover the World</span>
+            <h1 style={styles.heroTitle}>Explore <span style={styles.gradientText}>Unique Tours</span></h1>
+            <p style={styles.heroSubtitle}>Find and book the best experiences with local experts.</p>
+        </div>
+      </div>
+
       <div style={styles.container}>
-        {/* Header */}
-        <div style={styles.header}>
-          <h1 style={styles.title}>Explore Tours</h1>
-          <p style={styles.subtitle}>
-            Discover amazing experiences with local guides around the world
-          </p>
+        {/* SEARCH & FILTERS CONTAINER */}
+        <div style={styles.filterContainer}>
+            <div style={styles.searchWrapper}>
+                <span style={styles.searchIcon}>🔍</span>
+                <input
+                    type="text"
+                    placeholder="Where do you want to go?"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={styles.searchInput}
+                />
+            </div>
+
+            <div style={styles.filtersRow}>
+                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} style={styles.filterSelect}>
+                {categories.map((cat) => <option key={cat} value={cat}>{cat === 'all' ? 'All Categories' : cat.charAt(0).toUpperCase() + cat.slice(1)}</option>)}
+                </select>
+                <select value={selectedDifficulty} onChange={(e) => setSelectedDifficulty(e.target.value)} style={styles.filterSelect}>
+                {difficulties.map((diff) => <option key={diff} value={diff}>{diff === 'all' ? 'All Levels' : diff.charAt(0).toUpperCase() + diff.slice(1)}</option>)}
+                </select>
+                <select value={priceRange} onChange={(e) => setPriceRange(e.target.value)} style={styles.filterSelect}>
+                {priceRanges.map((range) => <option key={range.value} value={range.value}>{range.label}</option>)}
+                </select>
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={styles.filterSelect}>
+                    <option value="featured">Featured</option>
+                    <option value="price-low">Price: Low to High</option>
+                    <option value="price-high">Price: High to Low</option>
+                    <option value="rating">Highest Rated</option>
+                    <option value="popular">Most Popular</option>
+                </select>
+                <button onClick={clearFilters} style={styles.clearButton}>Clear</button>
+            </div>
+             
+            <div style={styles.resultsCount}>
+                {filteredTours.length} {filteredTours.length === 1 ? 'experience' : 'experiences'} found
+            </div>
         </div>
 
-        {/* Search and Filters */}
-        <div style={styles.filtersSection}>
-          {/* Search Bar */}
-          <div style={styles.searchBar}>
-            <input
-              type="text"
-              placeholder="Search tours, locations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={styles.searchInput}
-            />
-            <span style={styles.searchIcon}>🔍</span>
-          </div>
-
-          {/* Filter Buttons */}
-          <div style={styles.filtersRow}>
-            {/* Category Filter */}
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              style={styles.filterSelect}
-            >
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat === 'all' ? 'All Categories' : cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </option>
-              ))}
-            </select>
-
-            {/* Difficulty Filter */}
-            <select
-              value={selectedDifficulty}
-              onChange={(e) => setSelectedDifficulty(e.target.value)}
-              style={styles.filterSelect}
-            >
-              {difficulties.map((diff) => (
-                <option key={diff} value={diff}>
-                  {diff === 'all' ? 'All Levels' : diff.charAt(0).toUpperCase() + diff.slice(1)}
-                </option>
-              ))}
-            </select>
-
-            {/* Price Filter */}
-            <select
-              value={priceRange}
-              onChange={(e) => setPriceRange(e.target.value)}
-              style={styles.filterSelect}
-            >
-              {priceRanges.map((range) => (
-                <option key={range.value} value={range.value}>
-                  {range.label}
-                </option>
-              ))}
-            </select>
-
-            {/* Sort By */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              style={styles.filterSelect}
-            >
-              <option value="featured">Featured</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="rating">Highest Rated</option>
-              <option value="popular">Most Popular</option>
-            </select>
-
-            {/* Clear Filters Button */}
-            <button onClick={clearFilters} style={styles.clearButton}>
-              Clear All
-            </button>
-          </div>
-
-          {/* Results Count */}
-          <div style={styles.resultsCount}>
-            {filteredTours.length} {filteredTours.length === 1 ? 'tour' : 'tours'} found
-          </div>
-        </div>
-
-        {/* Tours Grid */}
+        {/* TOURS GRID */}
         {filteredTours.length === 0 ? (
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}>🔍</div>
             <h3 style={styles.emptyTitle}>No tours found</h3>
-            <p style={styles.emptyText}>
-              Try adjusting your filters or search query
-            </p>
-            <button onClick={clearFilters} style={styles.emptyButton}>
-              Clear Filters
-            </button>
+            <p style={styles.emptyText}>Try adjusting your filters or search query</p>
+            <button onClick={clearFilters} style={styles.emptyButton}>Clear Filters</button>
           </div>
         ) : (
           <div style={styles.toursGrid}>
             {filteredTours.map((tour) => (
-              <div key={tour.tourId} style={styles.tourCard}>
+              <div 
+                key={tour.tourId} 
+                style={{
+                    ...styles.tourCard,
+                    transform: hoveredCard === tour.tourId ? 'translateY(-10px)' : 'none',
+                    boxShadow: hoveredCard === tour.tourId ? '0 20px 40px rgba(0,0,0,0.12)' : '0 4px 20px rgba(0,0,0,0.08)'
+                }}
+                onMouseEnter={() => setHoveredCard(tour.tourId)}
+                onMouseLeave={() => setHoveredCard(null)}
+              >
                 <div style={styles.imageContainer}>
                   <img
                     src={tour.images?.[0] || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400'}
                     alt={tour.title}
-                    style={styles.tourImage}
+                    style={{
+                        ...styles.tourImage,
+                        transform: hoveredCard === tour.tourId ? 'scale(1.05)' : 'scale(1)'
+                    }}
                   />
+                  <button onClick={(e) => handleToggleFavorite(e, tour)} style={styles.favoriteButton}>
+                    {favorites.includes(tour.tourId) ? '❤️' : '🤍'}
+                  </button>
                   <div style={styles.categoryBadge}>{tour.category}</div>
                   {tour.averageRating && (
-                    <div style={styles.ratingBadge}>
-                      ⭐ {tour.averageRating.toFixed(1)}
-                    </div>
+                    <div style={styles.ratingBadge}>⭐ {tour.averageRating.toFixed(1)}</div>
                   )}
                 </div>
 
                 <div style={styles.tourContent}>
                   <h3 style={styles.tourTitle}>{tour.title}</h3>
                   <div style={styles.tourLocation}>📍 {tour.location}</div>
-
                   <div style={styles.tourMeta}>
                     <span style={styles.metaItem}>⏱️ {tour.duration}</span>
                     <span style={styles.metaItem}>🎯 {tour.difficulty}</span>
                   </div>
-
-                  <p style={styles.tourDescription}>
-                    {tour.description?.substring(0, 100)}...
-                  </p>
-
+                  <p style={styles.tourDescription}>{tour.description?.substring(0, 100)}...</p>
                   <div style={styles.cardFooter}>
                     <div style={styles.priceSection}>
                       <span style={styles.priceLabel}>From</span>
@@ -296,230 +213,99 @@ const DestinationsPage = () => {
 };
 
 const styles = {
-  page: {
-    minHeight: '100vh',
-    background: COLORS.light,
-    padding: '40px 0',
-  },
-  container: {
-    maxWidth: '1400px',
-    margin: '0 auto',
-    padding: '0 24px',
-  },
-  header: {
-    textAlign: 'center',
-    marginBottom: '40px',
-  },
-  title: {
-    fontSize: '48px',
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: '12px',
-  },
-  subtitle: {
-    fontSize: '18px',
-    color: '#666',
-  },
-  filtersSection: {
-    background: 'white',
-    padding: '32px',
-    borderRadius: '16px',
-    marginBottom: '40px',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-  },
-  searchBar: {
+  page: { minHeight: '100vh', background: '#ffffff' },
+  // Hero Section
+  hero: {
+    minHeight: '60vh', // Slightly shorter than Home
     position: 'relative',
-    marginBottom: '24px',
-  },
-  searchInput: {
-    width: '100%',
-    padding: '16px 50px 16px 20px',
-    border: `2px solid ${COLORS.border}`,
-    borderRadius: '12px',
-    fontSize: '16px',
-    outline: 'none',
-  },
-  searchIcon: {
-    position: 'absolute',
-    right: '20px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    fontSize: '20px',
-  },
-  filtersRow: {
     display: 'flex',
-    gap: '12px',
-    flexWrap: 'wrap',
-    marginBottom: '16px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    padding: '80px 24px',
+    marginBottom: '40px'
   },
+  heroBackground: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundImage: 'url(https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=1600&q=80)',
+    backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 0
+  },
+  heroOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.85) 0%, rgba(118, 75, 162, 0.85) 100%)',
+    zIndex: 1
+  },
+  heroContent: {
+    maxWidth: '800px', textAlign: 'center', color: 'white', position: 'relative', zIndex: 2
+  },
+  badge: {
+    display: 'inline-block', background: 'rgba(255, 255, 255, 0.2)', backdropFilter: 'blur(10px)',
+    padding: '8px 20px', borderRadius: '50px', fontSize: '14px', fontWeight: '600', marginBottom: '24px', border: '1px solid rgba(255, 255, 255, 0.3)'
+  },
+  heroTitle: { fontSize: '56px', fontWeight: '800', marginBottom: '16px', lineHeight: '1.2' },
+  heroSubtitle: { fontSize: '20px', opacity: 0.95, lineHeight: '1.6' },
+  gradientText: {
+    background: 'linear-gradient(to right, #ffd89b, #19547b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'inline-block'
+  },
+
+  container: { maxWidth: '1200px', margin: '0 auto', padding: '0 24px 80px' },
+  
+  // Modern Filter Container
+  filterContainer: {
+    background: 'white', borderRadius: '24px', padding: '32px', marginTop: '-80px', // Float over hero
+    boxShadow: '0 20px 60px rgba(0,0,0,0.1)', position: 'relative', zIndex: 10, marginBottom: '60px'
+  },
+  searchWrapper: {
+    display: 'flex', alignItems: 'center', background: '#f8f9fa', borderRadius: '16px', padding: '8px 16px', marginBottom: '24px', border: '1px solid #eef0f2'
+  },
+  searchIcon: { fontSize: '20px', marginRight: '12px', opacity: 0.5 },
+  searchInput: { flex: 1, padding: '12px 0', fontSize: '16px', border: 'none', outline: 'none', background: 'transparent' },
+  
+  filtersRow: { display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' },
   filterSelect: {
-    padding: '12px 16px',
-    border: `2px solid ${COLORS.border}`,
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    outline: 'none',
-    background: 'white',
+    padding: '12px 20px', border: '1px solid #e0e0e0', borderRadius: '50px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', outline: 'none', background: 'white', transition: '0.3s'
   },
   clearButton: {
-    padding: '12px 24px',
-    background: 'transparent',
-    border: `2px solid ${COLORS.primary}`,
-    color: COLORS.primary,
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
+    padding: '12px 24px', background: 'transparent', border: `1px solid ${COLORS.primary}`, color: COLORS.primary, borderRadius: '50px', fontSize: '14px', fontWeight: '600', cursor: 'pointer'
   },
-  resultsCount: {
-    fontSize: '14px',
-    color: '#666',
-    fontWeight: '500',
-  },
-  toursGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-    gap: '32px',
-  },
+  resultsCount: { fontSize: '14px', color: '#666', fontWeight: '600', marginTop: '12px' },
+
+  // Tours Grid
+  toursGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '32px' },
   tourCard: {
-    background: 'white',
-    borderRadius: '16px',
-    overflow: 'hidden',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-    transition: 'transform 0.3s, box-shadow 0.3s',
-    cursor: 'pointer',
+    background: 'white', borderRadius: '20px', overflow: 'hidden', cursor: 'pointer', transition: 'all 0.4s ease'
   },
-  imageContainer: {
-    position: 'relative',
-    height: '240px',
-    overflow: 'hidden',
-  },
-  tourImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
+  imageContainer: { position: 'relative', height: '240px', overflow: 'hidden' },
+  tourImage: { width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.6s ease' },
+  favoriteButton: {
+    position: 'absolute', top: '12px', right: '12px', background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
   },
   categoryBadge: {
-    position: 'absolute',
-    top: '16px',
-    left: '16px',
-    background: COLORS.primary,
-    color: 'white',
-    padding: '6px 12px',
-    borderRadius: '20px',
-    fontSize: '12px',
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    position: 'absolute', top: '12px', left: '12px', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', padding: '6px 14px', borderRadius: '50px', fontSize: '12px', fontWeight: '700', color: '#1a1a2e', textTransform: 'uppercase', letterSpacing: '0.5px'
   },
   ratingBadge: {
-    position: 'absolute',
-    top: '16px',
-    right: '16px',
-    background: 'white',
-    padding: '6px 12px',
-    borderRadius: '20px',
-    fontSize: '12px',
-    fontWeight: '600',
+    position: 'absolute', bottom: '12px', right: '12px', background: 'white', padding: '6px 12px', borderRadius: '12px', fontSize: '14px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
   },
-  tourContent: {
-    padding: '20px',
-  },
-  tourTitle: {
-    fontSize: '20px',
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: '8px',
-  },
-  tourLocation: {
-    fontSize: '14px',
-    color: '#666',
-    marginBottom: '12px',
-  },
-  tourMeta: {
-    display: 'flex',
-    gap: '16px',
-    marginBottom: '12px',
-  },
-  metaItem: {
-    fontSize: '13px',
-    color: '#666',
-  },
-  tourDescription: {
-    fontSize: '14px',
-    color: '#666',
-    lineHeight: '1.6',
-    marginBottom: '16px',
-  },
-  cardFooter: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: '16px',
-    borderTop: `1px solid ${COLORS.border}`,
-  },
-  priceSection: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  priceLabel: {
-    fontSize: '12px',
-    color: '#666',
-  },
-  price: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
+  tourContent: { padding: '24px' },
+  tourTitle: { fontSize: '20px', fontWeight: '700', color: '#1a1a2e', marginBottom: '8px', lineHeight: '1.4' },
+  tourLocation: { fontSize: '15px', color: '#666', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px' },
+  tourMeta: { display: 'flex', gap: '16px', marginBottom: '16px' },
+  metaItem: { fontSize: '13px', color: '#666', background: '#f5f7fa', padding: '6px 12px', borderRadius: '8px', fontWeight: '500' },
+  tourDescription: { fontSize: '15px', color: '#666', lineHeight: '1.6', marginBottom: '24px' },
+  cardFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '20px', borderTop: '1px solid #f0f0f0' },
+  priceSection: { display: 'flex', flexDirection: 'column' },
+  priceLabel: { fontSize: '12px', color: '#999', fontWeight: '600', textTransform: 'uppercase' },
+  price: { fontSize: '24px', fontWeight: '800', color: COLORS.primary },
   detailsButton: {
-    padding: '12px 24px',
-    background: COLORS.primary,
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
+    padding: '12px 24px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none', borderRadius: '50px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)', transition: 'transform 0.2s'
   },
-  emptyState: {
-    textAlign: 'center',
-    padding: '80px 20px',
-  },
-  emptyIcon: {
-    fontSize: '64px',
-    marginBottom: '24px',
-  },
-  emptyTitle: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: '12px',
-  },
-  emptyText: {
-    fontSize: '16px',
-    color: '#666',
-    marginBottom: '32px',
-  },
-  emptyButton: {
-    padding: '12px 32px',
-    background: COLORS.primary,
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  loadingContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100vh',
-  },
-  loader: {
-    fontSize: '18px',
-    color: '#666',
-  },
+  emptyState: { textAlign: 'center', padding: '80px 20px' },
+  emptyIcon: { fontSize: '64px', marginBottom: '24px', opacity: 0.5 },
+  emptyTitle: { fontSize: '24px', fontWeight: 'bold', color: '#333', marginBottom: '12px' },
+  emptyText: { fontSize: '16px', color: '#666', marginBottom: '32px' },
+  emptyButton: { padding: '12px 32px', background: COLORS.primary, color: 'white', border: 'none', borderRadius: '50px', fontSize: '16px', fontWeight: '600', cursor: 'pointer' },
+  loadingContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' },
+  loader: { fontSize: '18px', color: '#666' },
 };
 
 export default DestinationsPage;

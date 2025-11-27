@@ -5,20 +5,67 @@ import {
     getDocs, 
     setDoc, 
     updateDoc, 
+    deleteDoc, 
     query, 
     where, 
     orderBy, 
     serverTimestamp, 
     addDoc,
+    limit,
+    getCountFromServer 
 } from 'firebase/firestore';
 import { db } from '../firebase.js';
 
 // ============================================
+// NOTIFICATION SERVICE
+// ============================================
+export const notificationService = {
+    sendNotification: async (userId, title, message, type = 'info') => {
+        try {
+            if (!userId) return;
+            const notifRef = collection(db, 'notifications');
+            await addDoc(notifRef, {
+                userId,
+                title,
+                message,
+                type, // 'success', 'info', 'warning', 'error'
+                isRead: false,
+                createdAt: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Error sending notification:", error);
+        }
+    },
+
+    markAsRead: async (notificationId) => {
+        try {
+            const ref = doc(db, 'notifications', notificationId);
+            await updateDoc(ref, { isRead: true });
+        } catch (error) {
+            console.error("Error marking notification read:", error);
+        }
+    },
+
+    markAllAsRead: async (userId) => {
+        try {
+            const q = query(
+                collection(db, 'notifications'), 
+                where('userId', '==', userId), 
+                where('isRead', '==', false)
+            );
+            const snapshot = await getDocs(q);
+            const updates = snapshot.docs.map(d => updateDoc(doc(db, 'notifications', d.id), { isRead: true }));
+            await Promise.all(updates);
+        } catch (error) {
+            console.error("Error clearing notifications:", error);
+        }
+    }
+};
+
+// ============================================
 // TOURS SERVICE
 // ============================================
-
 export const tourService = {
-    // Create a new tour (Guide only)
     createTour: async (guideId, tourData) => {
         try {
             const toursRef = collection(db, 'tours');
@@ -32,7 +79,6 @@ export const tourService = {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
-            console.log('Tour created successfully:', docRef.id);
             return { success: true, tourId: docRef.id };
         } catch (error) {
             console.error('Error creating tour:', error);
@@ -40,7 +86,6 @@ export const tourService = {
         }
     },
 
-    // Get all tours for a specific guide
     getGuideTours: async (guideId) => {
         try {
             const q = query(
@@ -57,7 +102,6 @@ export const tourService = {
         }
     },
 
-    // Get single tour by ID
     getTourById: async (tourId) => {
         try {
             const tourRef = doc(db, 'tours', tourId);
@@ -72,7 +116,6 @@ export const tourService = {
         }
     },
 
-    // Get all tours (for travelers browsing) with optional filters
     getAllTours: async (filters = {}) => {
         try {
             let constraints = [where('isActive', '==', true)];
@@ -109,7 +152,6 @@ export const tourService = {
         }
     },
 
-    // Search tours
     searchTours: async (searchTerm) => {
         try {
             const tours = await tourService.getAllTours({});
@@ -127,7 +169,6 @@ export const tourService = {
         }
     },
 
-    // Update tour
     updateTour: async (tourId, updateData) => {
         try {
             const tourRef = doc(db, 'tours', tourId);
@@ -142,7 +183,6 @@ export const tourService = {
         }
     },
 
-    // Delete tour (soft delete)
     deleteTour: async (tourId) => {
         try {
             const tourRef = doc(db, 'tours', tourId);
@@ -161,7 +201,6 @@ export const tourService = {
 // ============================================
 // BOOKINGS SERVICE
 // ============================================
-
 export const bookingService = {
     createBooking: async (bookingData) => {
         try {
@@ -169,14 +208,10 @@ export const bookingService = {
             const tourRef = doc(db, 'tours', bookingData.tourId);
             
             const tourSnap = await getDoc(tourRef);
-            if (!tourSnap.exists()) {
-                throw new Error('Tour not found');
-            }
-
+            if (!tourSnap.exists()) throw new Error('Tour not found');
             const tourData = tourSnap.data();
-            if (!tourData.isActive) {
-                throw new Error('Tour is no longer available');
-            }
+
+            if (!tourData.isActive) throw new Error('Tour is no longer available');
 
             const newBooking = {
                 ...bookingData,
@@ -194,7 +229,22 @@ export const bookingService = {
                 updatedAt: serverTimestamp(),
             });
 
-            console.log('Booking created successfully with ID:', bookingDocRef.id);
+            // NOTIFY GUIDE
+            await notificationService.sendNotification(
+                tourData.guideId,
+                "New Booking Request! 📅",
+                `You have a new booking for "${tourData.title}". Check your dashboard.`,
+                "info"
+            );
+
+            // NOTIFY TRAVELER
+            await notificationService.sendNotification(
+                bookingData.userId,
+                "Booking Sent ⏳",
+                `Your booking request for "${tourData.title}" has been sent.`,
+                "info"
+            );
+
             return bookingDocRef.id;
         } catch (error) {
             console.error('Error creating booking:', error);
@@ -202,34 +252,21 @@ export const bookingService = {
         }
     },
 
-    // Get traveler bookings - NEW FUNCTION
     getTravelerBookings: async (travelerId) => {
         try {
-            console.log('Fetching bookings for traveler:', travelerId);
             const q = query(
                 collection(db, 'bookings'),
                 where('travelerId', '==', travelerId),
                 orderBy('createdAt', 'desc')
             );
             const querySnapshot = await getDocs(q);
-            const bookings = querySnapshot.docs.map(d => ({ 
-                bookingId: d.id, 
-                ...d.data() 
-            }));
-            console.log('Found bookings:', bookings);
-            return bookings;
+            return querySnapshot.docs.map(d => ({ bookingId: d.id, ...d.data() }));
         } catch (error) {
             console.error('Error fetching traveler bookings:', error);
-            // If the error is about missing index, return empty array
-            if (error.message.includes('index')) {
-                console.warn('Firestore index needed. Please create the index in Firebase Console.');
-                return [];
-            }
-            throw error;
+            return [];
         }
     },
 
-    // Get guide bookings
     getGuideBookings: async (guideId) => {
         try {
             const q = query(
@@ -238,21 +275,13 @@ export const bookingService = {
                 orderBy('createdAt', 'desc')
             );
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(d => ({ 
-                bookingId: d.id, 
-                ...d.data() 
-            }));
+            return querySnapshot.docs.map(d => ({ bookingId: d.id, ...d.data() }));
         } catch (error) {
             console.error('Error fetching guide bookings:', error);
-            if (error.message.includes('index')) {
-                console.warn('Firestore index needed. Please create the index in Firebase Console.');
-                return [];
-            }
-            throw error;
+            return [];
         }
     },
 
-    // Legacy function - kept for compatibility
     getUserBookings: async (userId, role = 'traveler') => {
         try {
             if (role === 'guide') {
@@ -283,11 +312,39 @@ export const bookingService = {
     updateBookingStatus: async (bookingId, status) => {
         try {
             const bookingRef = doc(db, 'bookings', bookingId);
+            const bookingSnap = await getDoc(bookingRef);
+            const bookingData = bookingSnap.data();
+
             await updateDoc(bookingRef, {
                 status,
                 updatedAt: serverTimestamp(),
                 ...(status === 'completed' && { completedAt: serverTimestamp() }),
             });
+
+            // NOTIFICATIONS FOR STATUS CHANGE
+            if (status === 'confirmed') {
+                await notificationService.sendNotification(
+                    bookingData.userId,
+                    "Booking Confirmed! ✅",
+                    `Great news! Your tour "${bookingData.tourTitle}" has been confirmed.`,
+                    "success"
+                );
+            } else if (status === 'cancelled') {
+                await notificationService.sendNotification(
+                    bookingData.userId, 
+                    "Booking Cancelled ❌",
+                    `Your booking for "${bookingData.tourTitle}" was cancelled.`,
+                    "error"
+                );
+            } else if (status === 'completed') {
+                await notificationService.sendNotification(
+                    bookingData.userId,
+                    "Tour Completed 🌟",
+                    `We hope you enjoyed "${bookingData.tourTitle}"! Please leave a review.`,
+                    "info"
+                );
+            }
+
             return { success: true };
         } catch (error) {
             console.error('Error updating booking status:', error);
@@ -298,22 +355,87 @@ export const bookingService = {
     cancelBooking: async (bookingId) => {
         try {
             const bookingRef = doc(db, 'bookings', bookingId);
+            const bookingSnap = await getDoc(bookingRef);
+            
+            if (!bookingSnap.exists()) throw new Error("Booking not found");
+            const bookingData = bookingSnap.data();
+
             await updateDoc(bookingRef, {
                 status: 'cancelled',
                 updatedAt: serverTimestamp(),
             });
+
+            // NOTIFY GUIDE
+            await notificationService.sendNotification(
+                bookingData.guideId,
+                "Booking Cancelled ⚠️",
+                `The traveler cancelled their booking for "${bookingData.tourTitle}".`,
+                "warning"
+            );
+
             return { success: true };
         } catch (error) {
             console.error('Error cancelling booking:', error);
             throw error;
         }
     },
+
+    // NEW: Request Refund (Traveler Side)
+    requestRefund: async (bookingId, reason) => {
+        try {
+            const bookingRef = doc(db, 'bookings', bookingId);
+            await updateDoc(bookingRef, { 
+                status: 'refund_pending',
+                refundReason: reason,
+                updatedAt: serverTimestamp() 
+            });
+            return { success: true };
+        } catch (error) { 
+            console.error("Error requesting refund:", error); 
+            throw error; 
+        }
+    },
+
+    // NEW: Process Admin Refund
+    processAdminRefund: async (bookingId) => {
+        try {
+            const bookingRef = doc(db, 'bookings', bookingId);
+            const bookingSnap = await getDoc(bookingRef);
+            const bookingData = bookingSnap.data();
+
+            await updateDoc(bookingRef, { 
+                status: 'refunded',
+                refundStatus: 'completed',
+                refundedAt: serverTimestamp()
+            });
+
+            // Notify User
+            await notificationService.sendNotification(
+                bookingData.userId,
+                "Refund Approved 💰",
+                `Your refund of $${bookingData.totalPrice} for "${bookingData.tourTitle}" has been approved.`,
+                "success"
+            );
+
+            // Notify Guide
+            await notificationService.sendNotification(
+                bookingData.guideId,
+                "Refund Processed 💸",
+                `A refund for "${bookingData.tourTitle}" has been processed by Admin.`,
+                "warning"
+            );
+
+            return { success: true };
+        } catch (error) { 
+            console.error("Error processing admin refund:", error); 
+            throw error; 
+        }
+    }
 };
 
 // ============================================
 // GUIDES SERVICE
 // ============================================
-
 export const guideService = {
     createGuideProfile: async (userId, profileData) => {
         try {
@@ -329,7 +451,6 @@ export const guideService = {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
-            console.log('Guide profile created successfully for:', userId);
             return { success: true };
         } catch (error) {
             console.error('Error creating guide profile:', error);
@@ -417,7 +538,6 @@ export const guideService = {
 // ============================================
 // REVIEWS SERVICE
 // ============================================
-
 export const reviewService = {
     createReview: async (bookingId, reviewData) => {
         try {
@@ -437,6 +557,14 @@ export const reviewService = {
             if (booking && booking.tourId) {
                 await reviewService.updateTourRating(booking.tourId);
             }
+
+            // NOTIFY GUIDE
+            await notificationService.sendNotification(
+                reviewData.guideId,
+                "New Review! ⭐",
+                `You received a ${reviewData.rating}-star review for "${reviewData.tourTitle}".`,
+                "success"
+            );
 
             return { success: true, reviewId: docRef.id };
         } catch (error) {
@@ -480,17 +608,10 @@ export const reviewService = {
             const reviews = await reviewService.getGuideReviews(guideId);
             if (!reviews || reviews.length === 0) {
                 const guideRef = doc(db, 'guides', guideId);
-                await updateDoc(guideRef, { 
-                    rating: 0, 
-                    reviewCount: 0,
-                    updatedAt: serverTimestamp()
-                });
+                await updateDoc(guideRef, { rating: 0, reviewCount: 0, updatedAt: serverTimestamp() });
                 return;
             }
-
-            const averageRating =
-                reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length;
-
+            const averageRating = reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length;
             const guideRef = doc(db, 'guides', guideId);
             await updateDoc(guideRef, {
                 rating: Math.round(averageRating * 10) / 10,
@@ -507,17 +628,10 @@ export const reviewService = {
             const reviews = await reviewService.getTourReviews(tourId);
             if (!reviews || reviews.length === 0) {
                 const tourRef = doc(db, 'tours', tourId);
-                await updateDoc(tourRef, { 
-                    averageRating: 0, 
-                    totalReviews: 0,
-                    updatedAt: serverTimestamp()
-                });
+                await updateDoc(tourRef, { averageRating: 0, totalReviews: 0, updatedAt: serverTimestamp() });
                 return;
             }
-
-            const averageRating =
-                reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length;
-
+            const averageRating = reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length;
             const tourRef = doc(db, 'tours', tourId);
             await updateDoc(tourRef, {
                 averageRating: Math.round(averageRating * 10) / 10,
@@ -533,7 +647,6 @@ export const reviewService = {
 // ============================================
 // MESSAGES SERVICE
 // ============================================
-
 export const messageService = {
     getOrCreateConversation: async (userId1, userId2) => {
         try {
@@ -542,7 +655,6 @@ export const messageService = {
                 where('participants', 'array-contains', userId1)
             );
             const querySnapshot = await getDocs(q);
-
             let conversationId = null;
             for (const docSnap of querySnapshot.docs) {
                 const data = docSnap.data();
@@ -551,9 +663,7 @@ export const messageService = {
                     break;
                 }
             }
-
             if (conversationId) return conversationId;
-
             const conversationsRef = collection(db, 'conversations');
             const docRef = await addDoc(conversationsRef, {
                 participants: [userId1, userId2].sort(),
@@ -561,7 +671,6 @@ export const messageService = {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
-
             return docRef.id;
         } catch (error) {
             console.error('Error managing conversation:', error);
@@ -579,14 +688,12 @@ export const messageService = {
                 timestamp: serverTimestamp(),
                 isRead: false,
             });
-
             const conversationRef = doc(db, 'conversations', conversationId);
             await updateDoc(conversationRef, {
                 lastMessage: content,
                 lastMessageTime: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
-
             return { success: true, messageId: docRef.id };
         } catch (error) {
             console.error('Error sending message:', error);
@@ -627,7 +734,6 @@ export const messageService = {
 // ============================================
 // PAYMENTS SERVICE
 // ============================================
-
 export const paymentService = {
     createPayment: async (bookingId, paymentData) => {
         try {
@@ -638,7 +744,6 @@ export const paymentService = {
                 status: 'pending',
                 createdAt: serverTimestamp(),
             });
-
             return { success: true, paymentId: docRef.id };
         } catch (error) {
             console.error('Error creating payment:', error);
@@ -653,7 +758,6 @@ export const paymentService = {
                 status,
                 processedAt: serverTimestamp(),
             });
-
             return { success: true };
         } catch (error) {
             console.error('Error updating payment:', error);
@@ -680,4 +784,74 @@ export const paymentService = {
             return null;
         }
     },
+};
+
+// ============================================
+// FAVORITES SERVICE
+// ============================================
+export const favoritesService = {
+    addToFavorites: async (userId, tour) => {
+        try {
+            const docId = `${userId}_${tour.tourId}`;
+            const docRef = doc(db, 'favorites', docId);
+            await setDoc(docRef, {
+                userId,
+                tourId: tour.tourId,
+                tourTitle: tour.title,
+                tourImage: tour.images?.[0] || null,
+                location: tour.location,
+                price: tour.price,
+                createdAt: serverTimestamp()
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("Error adding favorite:", error);
+            throw error;
+        }
+    },
+
+    removeFromFavorites: async (userId, tourId) => {
+        try {
+            const docId = `${userId}_${tourId}`;
+            const docRef = doc(db, 'favorites', docId);
+            await deleteDoc(docRef);
+            return { success: true };
+        } catch (error) {
+            console.error("Error removing favorite:", error);
+            throw error;
+        }
+    },
+
+    getUserFavoritesIds: async (userId) => {
+        try {
+            const q = query(collection(db, 'favorites'), where('userId', '==', userId));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => doc.data().tourId);
+        } catch (error) {
+            console.error("Error fetching favorites:", error);
+            return [];
+        }
+    }
+    
+};
+
+// ... (keep all existing code above) ...
+
+
+// CONTACT SERVICE 
+export const contactService = {
+    submitInquiry: async (data) => {
+        try {
+            const inquiriesRef = collection(db, 'inquiries');
+            await addDoc(inquiriesRef, {
+                ...data,
+                status: 'open', // open, pending, resolved
+                createdAt: serverTimestamp(),
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("Error submitting inquiry:", error);
+            throw error;
+        }
+    }
 };
