@@ -1,4 +1,3 @@
-// src/pages/HomePage.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { COLORS } from '../utils/colors';
@@ -41,6 +40,18 @@ const HomePage = () => {
       image: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800',
       tours: 167,
     },
+    {
+      id: 5,
+      name: 'Rome, Italy',
+      image: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800',
+      tours: 182,
+    },
+    {
+      id: 6,
+      name: 'Bali, Indonesia',
+      image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800',
+      tours: 145,
+    },
   ];
 
   const popularCategories = [
@@ -50,6 +61,9 @@ const HomePage = () => {
     { icon: '🎨', name: 'Art', description: 'Galleries, studios & workshops', color: '#a8dadc' },
     { icon: '🏖️', name: 'Beach', description: 'Coastal tours & water sports', color: '#457b9d' },
     { icon: '🌃', name: 'Nightlife', description: 'Bars, clubs & entertainment', color: '#e63946' },
+    // --- ADDED NEW CATEGORIES ---
+    { icon: '🌿', name: 'Nature', description: 'Eco-tours, wildlife & parks', color: '#95d5b2' },
+    { icon: '📸', name: 'Photography', description: 'Scenic spots & photo walks', color: '#bde0fe' },
   ];
 
   return (

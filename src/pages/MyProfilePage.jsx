@@ -22,13 +22,17 @@ const MyProfilePage = () => {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
 
+  // Helper to check if admin
+  const isAdmin = userProfile?.role === 'admin';
+
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !isAdmin) {
+      // Only fetch data if NOT admin
       fetchUserData();
     } else {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, isAdmin]);
 
   const fetchUserData = () => {
     setLoading(true);
@@ -201,8 +205,8 @@ const MyProfilePage = () => {
           {/* Header Actions */}
           <div style={styles.headerActions}>
             
-            {/* NEW: Admin Dashboard Button (Only visible to Admins) */}
-            {userProfile?.role === 'admin' && (
+            {/* Admin Dashboard Button */}
+            {isAdmin && (
                 <button 
                     onClick={() => setCurrentPage('admin-dashboard')}
                     style={styles.adminButton}
@@ -250,218 +254,223 @@ const MyProfilePage = () => {
         )}
       </div>
 
-      <div style={styles.tabs}>
-        <button
-          onClick={() => setActiveTab('bookings')}
-          style={{ ...styles.tab, ...(activeTab === 'bookings' ? styles.activeTab : {}) }}
-        >
-          📅 My Bookings
-        </button>
-        <button
-          onClick={() => setActiveTab('favorites')}
-          style={{ ...styles.tab, ...(activeTab === 'favorites' ? styles.activeTab : {}) }}
-        >
-          ❤️ Favorites
-        </button>
-        <button
-          onClick={() => setActiveTab('reviews')}
-          style={{ ...styles.tab, ...(activeTab === 'reviews' ? styles.activeTab : {}) }}
-        >
-          ⭐ My Reviews
-        </button>
-      </div>
-
-      <div style={styles.content}>
-        {loading ? (
-          <div style={styles.loadingContainer}>
-            <div style={styles.spinner}></div>
-            <p>Loading...</p>
+      {/* HIDE TABS IF ADMIN */}
+      {!isAdmin && (
+        <>
+          <div style={styles.tabs}>
+            <button
+              onClick={() => setActiveTab('bookings')}
+              style={{ ...styles.tab, ...(activeTab === 'bookings' ? styles.activeTab : {}) }}
+            >
+              📅 My Bookings
+            </button>
+            <button
+              onClick={() => setActiveTab('favorites')}
+              style={{ ...styles.tab, ...(activeTab === 'favorites' ? styles.activeTab : {}) }}
+            >
+              ❤️ Favorites
+            </button>
+            <button
+              onClick={() => setActiveTab('reviews')}
+              style={{ ...styles.tab, ...(activeTab === 'reviews' ? styles.activeTab : {}) }}
+            >
+              ⭐ My Reviews
+            </button>
           </div>
-        ) : (
-          <>
-            {activeTab === 'bookings' && (
-              <div style={styles.section}>
-                <h2 style={styles.sectionTitle}>My Bookings</h2>
-                {bookings.length === 0 ? (
-                  <div style={styles.emptyState}>
-                    <p style={styles.emptyIcon}>📅</p>
-                    <p style={styles.emptyText}>No bookings yet</p>
-                    <button
-                      onClick={() => setCurrentPage('destinations')}
-                      style={styles.browseButton}
-                    >
-                      Browse Tours
-                    </button>
-                  </div>
-                ) : (
-                  <div style={styles.bookingsList}>
-                    {bookings.map((booking) => (
-                      <div key={booking.id} style={styles.bookingCard}>
-                        <div style={styles.bookingImageContainer}>
-                          <img
-                            src={getBookingImage(booking)}
-                            alt={booking.tourTitle || 'Tour'}
-                            style={styles.bookingImage}
-                            onError={(e) => {
-                                e.target.onerror = null; 
-                                e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400';
-                            }}
-                          />
-                          <div
-                            style={{
-                              ...styles.statusBadge,
-                              background: getStatusColor(booking.status),
-                            }}
-                          >
-                            {booking.status ? (booking.status.charAt(0).toUpperCase() + booking.status.slice(1)) : 'Unknown'}
-                          </div>
-                        </div>
 
-                        <div style={styles.bookingDetails}>
-                          <h3 style={styles.bookingTitle}>{booking.tourTitle || booking.tour?.title || 'Tour Booking'}</h3>
-
-                          <div style={styles.bookingInfo}>
-                            <div style={styles.bookingInfoItem}>
-                              <span style={styles.bookingIcon}>📍</span>
-                              <span>{booking.location || booking.tour?.location || 'Location N/A'}</span>
-                            </div>
-                            <div style={styles.bookingInfoItem}>
-                              <span style={styles.bookingIcon}>📅</span>
-                              <span>{formatDate(booking.date || booking.startDate)}</span>
-                            </div>
-                            <div style={styles.bookingInfoItem}>
-                              <span style={styles.bookingIcon}>⏰</span>
-                              <span>{booking.startTime || '09:00'}</span>
-                            </div>
-                            <div style={styles.bookingInfoItem}>
-                              <span style={styles.bookingIcon}>💰</span>
-                              <span style={styles.price}>${booking.totalPrice}</span>
-                            </div>
-                          </div>
-
-                          {booking.refundStatus === 'completed' && (
-                            <div style={styles.refundBadge}>
-                              ✅ Refunded: ${booking.refundAmount?.toFixed(2)}
-                            </div>
-                          )}
-
-                          <div style={styles.bookingActions}>
-                            <button
-                              onClick={() => {
-                                  sessionStorage.setItem('selectedTourId', booking.tourId || booking.tour?.tourId);
-                                  setCurrentPage('tour-details');
-                              }}
-                              style={styles.viewButton}
-                            >
-                              View Tour
-                            </button>
-                            
-                            <button
-                              onClick={() => handleChatWithGuide(booking)}
-                              style={styles.chatButton}
-                            >
-                              💬 Chat Guide
-                            </button>
-                            
-                            {booking.status === 'confirmed' && booking.paymentStatus === 'completed' && (
-                              <button
-                                onClick={() => handleRequestRefund(booking)}
-                                style={styles.refundButton}
+          <div style={styles.content}>
+            {loading ? (
+              <div style={styles.loadingContainer}>
+                <div style={styles.spinner}></div>
+                <p>Loading...</p>
+              </div>
+            ) : (
+              <>
+                {activeTab === 'bookings' && (
+                  <div style={styles.section}>
+                    <h2 style={styles.sectionTitle}>My Bookings</h2>
+                    {bookings.length === 0 ? (
+                      <div style={styles.emptyState}>
+                        <p style={styles.emptyIcon}>📅</p>
+                        <p style={styles.emptyText}>No bookings yet</p>
+                        <button
+                          onClick={() => setCurrentPage('destinations')}
+                          style={styles.browseButton}
+                        >
+                          Browse Tours
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={styles.bookingsList}>
+                        {bookings.map((booking) => (
+                          <div key={booking.id} style={styles.bookingCard}>
+                            <div style={styles.bookingImageContainer}>
+                              <img
+                                src={getBookingImage(booking)}
+                                alt={booking.tourTitle || 'Tour'}
+                                style={styles.bookingImage}
+                                onError={(e) => {
+                                    e.target.onerror = null; 
+                                    e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400';
+                                }}
+                              />
+                              <div
+                                style={{
+                                  ...styles.statusBadge,
+                                  background: getStatusColor(booking.status),
+                                }}
                               >
-                                Request Refund
-                              </button>
-                            )}
+                                {booking.status ? (booking.status.charAt(0).toUpperCase() + booking.status.slice(1)) : 'Unknown'}
+                              </div>
+                            </div>
 
-                            {booking.status === 'completed' && !hasReview(booking.id) && (
+                            <div style={styles.bookingDetails}>
+                              <h3 style={styles.bookingTitle}>{booking.tourTitle || booking.tour?.title || 'Tour Booking'}</h3>
+
+                              <div style={styles.bookingInfo}>
+                                <div style={styles.bookingInfoItem}>
+                                  <span style={styles.bookingIcon}>📍</span>
+                                  <span>{booking.location || booking.tour?.location || 'Location N/A'}</span>
+                                </div>
+                                <div style={styles.bookingInfoItem}>
+                                  <span style={styles.bookingIcon}>📅</span>
+                                  <span>{formatDate(booking.date || booking.startDate)}</span>
+                                </div>
+                                <div style={styles.bookingInfoItem}>
+                                  <span style={styles.bookingIcon}>⏰</span>
+                                  <span>{booking.startTime || '09:00'}</span>
+                                </div>
+                                <div style={styles.bookingInfoItem}>
+                                  <span style={styles.bookingIcon}>💰</span>
+                                  <span style={styles.price}>${booking.totalPrice}</span>
+                                </div>
+                              </div>
+
+                              {booking.refundStatus === 'completed' && (
+                                <div style={styles.refundBadge}>
+                                  ✅ Refunded: ${booking.refundAmount?.toFixed(2)}
+                                </div>
+                              )}
+
+                              <div style={styles.bookingActions}>
                                 <button
-                                    onClick={() => handleLeaveReview(booking)}
-                                    style={styles.reviewButton}
+                                  onClick={() => {
+                                      sessionStorage.setItem('selectedTourId', booking.tourId || booking.tour?.tourId);
+                                      setCurrentPage('tour-details');
+                                  }}
+                                  style={styles.viewButton}
                                 >
-                                    ⭐ Leave Review
+                                  View Tour
                                 </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                                
+                                <button
+                                  onClick={() => handleChatWithGuide(booking)}
+                                  style={styles.chatButton}
+                                >
+                                  💬 Chat Guide
+                                </button>
+                                
+                                {booking.status === 'confirmed' && booking.paymentStatus === 'completed' && (
+                                  <button
+                                    onClick={() => handleRequestRefund(booking)}
+                                    style={styles.refundButton}
+                                  >
+                                    Request Refund
+                                  </button>
+                                )}
 
-            {activeTab === 'favorites' && (
-              <div style={styles.section}>
-                <h2 style={styles.sectionTitle}>Favorite Tours</h2>
-                {favorites.length === 0 ? (
-                  <div style={styles.emptyState}>
-                    <p style={styles.emptyIcon}>❤️</p>
-                    <p style={styles.emptyText}>No favorites yet</p>
-                    <button onClick={() => setCurrentPage('destinations')} style={styles.browseButton}>
-                      Explore Tours
-                    </button>
-                  </div>
-                ) : (
-                  <div style={styles.favoritesGrid}>
-                    {favorites.map((favorite) => (
-                      <div key={favorite.id} style={styles.favoriteCard}>
-                        <img
-                          src={favorite.tourImage || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400'}
-                          alt={favorite.tourTitle}
-                          style={styles.favoriteImage}
-                        />
-                        <div style={styles.favoriteContent}>
-                          <h3 style={styles.favoriteTitle}>{favorite.tourTitle}</h3>
-                          <p style={styles.favoriteLocation}>📍 {favorite.location}</p>
-                          <p style={styles.favoritePrice}>💰 ${favorite.price}</p>
-                          <button
-                            onClick={() => {
-                                sessionStorage.setItem('selectedTourId', favorite.tourId);
-                                setCurrentPage('tour-details');
-                            }}
-                            style={styles.viewTourButton}
-                          >
-                            View Tour
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'reviews' && (
-              <div style={styles.section}>
-                <h2 style={styles.sectionTitle}>My Reviews</h2>
-                {reviews.length === 0 ? (
-                  <div style={styles.emptyState}>
-                    <p style={styles.emptyIcon}>⭐</p>
-                    <p style={styles.emptyText}>No reviews yet</p>
-                    <p style={styles.emptySubtext}>Complete a booking to leave a review</p>
-                  </div>
-                ) : (
-                  <div style={styles.reviewsList}>
-                    {reviews.map((review) => (
-                      <div key={review.id} style={styles.reviewCard}>
-                        <div style={styles.reviewHeader}>
-                          <h3 style={styles.reviewTourTitle}>{review.tourTitle}</h3>
-                          <div style={styles.reviewRating}>
-                            {'⭐'.repeat(review.rating)}
+                                {booking.status === 'completed' && !hasReview(booking.id) && (
+                                    <button
+                                        onClick={() => handleLeaveReview(booking)}
+                                        style={styles.reviewButton}
+                                    >
+                                        ⭐ Leave Review
+                                    </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                        <p style={styles.reviewText}>{review.comment}</p>
-                        <p style={styles.reviewDate}>
-                          {formatDate(review.createdAt)}
-                        </p>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
-              </div>
+
+                {activeTab === 'favorites' && (
+                  <div style={styles.section}>
+                    <h2 style={styles.sectionTitle}>Favorite Tours</h2>
+                    {favorites.length === 0 ? (
+                      <div style={styles.emptyState}>
+                        <p style={styles.emptyIcon}>❤️</p>
+                        <p style={styles.emptyText}>No favorites yet</p>
+                        <button onClick={() => setCurrentPage('destinations')} style={styles.browseButton}>
+                          Explore Tours
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={styles.favoritesGrid}>
+                        {favorites.map((favorite) => (
+                          <div key={favorite.id} style={styles.favoriteCard}>
+                            <img
+                              src={favorite.tourImage || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400'}
+                              alt={favorite.tourTitle}
+                              style={styles.favoriteImage}
+                            />
+                            <div style={styles.favoriteContent}>
+                              <h3 style={styles.favoriteTitle}>{favorite.tourTitle}</h3>
+                              <p style={styles.favoriteLocation}>📍 {favorite.location}</p>
+                              <p style={styles.favoritePrice}>💰 ${favorite.price}</p>
+                              <button
+                                onClick={() => {
+                                    sessionStorage.setItem('selectedTourId', favorite.tourId);
+                                    setCurrentPage('tour-details');
+                                }}
+                                style={styles.viewTourButton}
+                              >
+                                View Tour
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'reviews' && (
+                  <div style={styles.section}>
+                    <h2 style={styles.sectionTitle}>My Reviews</h2>
+                    {reviews.length === 0 ? (
+                      <div style={styles.emptyState}>
+                        <p style={styles.emptyIcon}>⭐</p>
+                        <p style={styles.emptyText}>No reviews yet</p>
+                        <p style={styles.emptySubtext}>Complete a booking to leave a review</p>
+                      </div>
+                    ) : (
+                      <div style={styles.reviewsList}>
+                        {reviews.map((review) => (
+                          <div key={review.id} style={styles.reviewCard}>
+                            <div style={styles.reviewHeader}>
+                              <h3 style={styles.reviewTourTitle}>{review.tourTitle}</h3>
+                              <div style={styles.reviewRating}>
+                                {'⭐'.repeat(review.rating)}
+                              </div>
+                            </div>
+                            <p style={styles.reviewText}>{review.comment}</p>
+                            <p style={styles.reviewDate}>
+                              {formatDate(review.createdAt)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
 
       <EditProfileModal
         isOpen={showEditModal}

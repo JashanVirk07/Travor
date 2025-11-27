@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { adminService } from '../services/adminService';
-import { bookingService } from '../services/firestoreService'; // For refunds
+import { bookingService } from '../services/firestoreService'; 
 import { COLORS } from '../utils/colors';
 
 const AdminDashboardPage = () => {
@@ -11,7 +11,7 @@ const AdminDashboardPage = () => {
   const [users, setUsers] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [tours, setTours] = useState([]);
-  const [refunds, setRefunds] = useState([]); // NEW: Refund State
+  const [refunds, setRefunds] = useState([]); 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,7 +40,6 @@ const AdminDashboardPage = () => {
       const data = await adminService.getAllTours();
       setTours(data);
     } else if (activeTab === 'refunds') {
-      // NEW: Get all bookings, filter for pending refunds
       const data = await adminService.getAllBookings();
       setRefunds(data.filter(b => b.status === 'refund_pending'));
     }
@@ -54,6 +53,18 @@ const AdminDashboardPage = () => {
     }
   };
 
+  // NEW: Handle Delete User
+  const handleDeleteUser = async (userId) => {
+    if (window.confirm("⚠️ Are you sure? This will permanently delete this user's profile data from the database.")) {
+      try {
+        await adminService.deleteUser(userId);
+        loadData(); // Refresh list
+      } catch (error) {
+        alert("Failed to delete user.");
+      }
+    }
+  };
+
   const handleDeleteTour = async (tourId) => {
     if (window.confirm("Are you sure you want to delete this tour?")) {
       await adminService.deleteTour(tourId);
@@ -61,12 +72,9 @@ const AdminDashboardPage = () => {
     }
   };
 
-  // NEW: Approve Refund Logic
   const handleApproveRefund = async (booking) => {
       if (window.confirm(`Approve refund of $${booking.totalPrice} for ${booking.travelerName}?`)) {
           try {
-              // 1. Process actual refund via service (simulated here, but would call Stripe in real life)
-              // 2. Update status to 'refunded'
               await bookingService.processAdminRefund(booking.id);
               alert("Refund Approved & Processed.");
               loadData();
@@ -124,11 +132,24 @@ const AdminDashboardPage = () => {
                 {user.isVerified ? <span style={styles.verified}>Verified</span> : 'Unverified'}
               </td>
               <td style={styles.td}>
-                {user.role === 'guide' && !user.isVerified && (
-                  <button onClick={() => handleVerifyGuide(user.id)} style={styles.actionBtn}>
-                    ✅ Verify
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    {user.role === 'guide' && !user.isVerified && (
+                    <button onClick={() => handleVerifyGuide(user.id)} style={styles.actionBtn}>
+                        ✅ Verify
+                    </button>
+                    )}
+                    
+                    {/* NEW: Delete Button (Hidden for Admins to prevent self-deletion) */}
+                    {user.role !== 'admin' && (
+                        <button 
+                            onClick={() => handleDeleteUser(user.id)} 
+                            style={styles.deleteUserBtn}
+                            title="Delete User"
+                        >
+                            🗑️
+                        </button>
+                    )}
+                </div>
               </td>
             </tr>
           ))}
@@ -206,7 +227,6 @@ const AdminDashboardPage = () => {
     </div>
   );
 
-  // NEW: Refunds Tab
   const RefundsTab = () => (
     <div style={styles.tableContainer}>
       {refunds.length === 0 ? (
@@ -261,7 +281,6 @@ const AdminDashboardPage = () => {
           <button style={activeTab === 'tours' ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab('tours')}>
             🗺️ Tours
           </button>
-          {/* NEW REFUND TAB */}
           <button style={activeTab === 'refunds' ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab('refunds')}>
             💸 Refunds
           </button>
@@ -315,6 +334,20 @@ const styles = {
   actionBtn: { padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' },
   deleteBtn: { padding: '6px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' },
   approveBtn: { padding: '6px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' },
+  // NEW: Delete User Button Style
+  deleteUserBtn: {
+    padding: '6px 12px',
+    background: '#fee2e2', 
+    color: '#ef4444',
+    border: '1px solid #fca5a5',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background 0.2s',
+  },
   status: { padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' },
   loading: { textAlign: 'center', padding: '40px', color: '#666' }
 };

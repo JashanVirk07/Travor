@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { tourService, bookingService } from '../services/firestoreService'; // Added bookingService
+import { tourService, bookingService } from '../services/firestoreService';
 import { COLORS } from '../utils/colors';
+// NEW IMPORTS FOR IMAGE UPLOAD
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
+import { Image, Loader } from 'lucide-react'; // Icons
 
 const GuideDashboardPage = () => {
   const { currentUser, userProfile, setCurrentPage } = useAuth();
   const [myTours, setMyTours] = useState([]);
-  const [myBookings, setMyBookings] = useState([]); // NEW: Track bookings
+  const [myBookings, setMyBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false); // New loading state for form
   const [showCreateForm, setShowCreateForm] = useState(false);
+
+  // NEW: Image State
+  const [tourImage, setTourImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -20,6 +29,7 @@ const GuideDashboardPage = () => {
     maxParticipants: '',
     meetingPoint: '',
     difficulty: 'easy',
+    startTime: '', // Added Start Time to form
   });
 
   useEffect(() => {
@@ -31,11 +41,8 @@ const GuideDashboardPage = () => {
   const loadGuideData = async () => {
     setLoading(true);
     try {
-      // Load Tours
       const tours = await tourService.getGuideTours(currentUser.uid);
       setMyTours(tours);
-
-      // Load Bookings (NEW)
       const bookings = await bookingService.getGuideBookings(currentUser.uid);
       setMyBookings(bookings);
     } catch (error) {
@@ -48,12 +55,22 @@ const GuideDashboardPage = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // NEW: Function to initiate chat with traveler
+  // NEW: Handle Image Selection
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setTourImage(file);
+      // Create local preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleMessageTraveler = (booking) => {
       sessionStorage.setItem('chatWithGuide', JSON.stringify({
-          // When guide starts chat, 'guideId' logic in MessagesPage will be flipped 
-          // because the MessagesPage logic handles "Other User".
-          // So we pass the traveler's ID as the target.
           guideId: booking.travelerId || booking.userId, 
           guideName: booking.travelerName || 'Traveler'
       }));
@@ -62,20 +79,38 @@ const GuideDashboardPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
+
     try {
+      let imageUrls = ['https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800']; // Default fallback
+
+      // 1. Upload Image if selected
+      if (tourImage) {
+        const storageRef = ref(storage, `tours/${currentUser.uid}/${Date.now()}_${tourImage.name}`);
+        const snapshot = await uploadBytes(storageRef, tourImage);
+        const url = await getDownloadURL(snapshot.ref);
+        imageUrls = [url]; // Use the uploaded image
+      }
+
+      // 2. Create Tour Data
       const tourData = {
         ...formData,
         price: parseFloat(formData.price),
         maxParticipants: parseInt(formData.maxParticipants),
-        images: ['https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800'],
-        highlights: ['Professional guide', 'Local experience', 'Memorable moments'],
+        images: imageUrls,
+        highlights: ['Professional guide', 'Local experience', 'Memorable moments'], // Can be expanded later
         included: ['Guide services', 'Itinerary planning'],
         languages: userProfile?.languages || ['English'],
+        // Save Start Time if provided, else default
+        startTime: formData.startTime || '09:00',
       };
 
       await tourService.createTour(currentUser.uid, tourData);
+      
       alert('✅ Tour created successfully!');
       setShowCreateForm(false);
+      
+      // Reset Form
       setFormData({
         title: '',
         description: '',
@@ -86,11 +121,17 @@ const GuideDashboardPage = () => {
         maxParticipants: '',
         meetingPoint: '',
         difficulty: 'easy',
+        startTime: '',
       });
-      loadGuideData(); // Refresh both
+      setTourImage(null);
+      setImagePreview(null);
+      
+      loadGuideData();
     } catch (error) {
       console.error('Error creating tour:', error);
       alert('❌ Failed to create tour: ' + error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -152,14 +193,41 @@ const GuideDashboardPage = () => {
           <div style={styles.formContainer}>
             <h2 style={styles.formTitle}>Create New Tour</h2>
             <form onSubmit={handleSubmit} style={styles.form}>
+              
+              {/* Image Upload Section */}
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Tour Image *</label>
+                <div style={styles.imageUploadWrapper}>
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleImageChange} 
+                        id="tour-image-upload"
+                        style={{display: 'none'}}
+                    />
+                    <label htmlFor="tour-image-upload" style={styles.imageUploadBox}>
+                        {imagePreview ? (
+                            <img src={imagePreview} alt="Preview" style={styles.imagePreview} />
+                        ) : (
+                            <div style={styles.imagePlaceholder}>
+                                <Image size={40} color="#ccc" />
+                                <span>Click to upload cover image</span>
+                            </div>
+                        )}
+                    </label>
+                </div>
+              </div>
+
               <div style={styles.formGroup}>
                 <label style={styles.label}>Tour Title *</label>
                 <input type="text" name="title" value={formData.title} onChange={handleChange} required style={styles.input} placeholder="e.g., Hidden Gems of Barcelona" />
               </div>
+              
               <div style={styles.formGroup}>
                 <label style={styles.label}>Description *</label>
                 <textarea name="description" value={formData.description} onChange={handleChange} required rows="4" style={styles.textarea} placeholder="Describe your tour experience..." />
               </div>
+              
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Location *</label>
@@ -170,6 +238,7 @@ const GuideDashboardPage = () => {
                   <input type="number" name="price" value={formData.price} onChange={handleChange} required min="0" style={styles.input} placeholder="50" />
                 </div>
               </div>
+
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Duration *</label>
@@ -180,7 +249,12 @@ const GuideDashboardPage = () => {
                   <input type="number" name="maxParticipants" value={formData.maxParticipants} onChange={handleChange} required min="1" style={styles.input} placeholder="10" />
                 </div>
               </div>
+
               <div style={styles.formRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Start Time</label>
+                  <input type="time" name="startTime" value={formData.startTime} onChange={handleChange} style={styles.input} />
+                </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Category *</label>
                   <select name="category" value={formData.category} onChange={handleChange} style={styles.input}>
@@ -188,27 +262,24 @@ const GuideDashboardPage = () => {
                     <option value="beach">Beach & Island</option>
                     <option value="mountain">Mountain Treks</option>
                     <option value="cultural">Cultural Heritage</option>
-                  </select>
-                </div>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Difficulty *</label>
-                  <select name="difficulty" value={formData.difficulty} onChange={handleChange} style={styles.input}>
-                    <option value="easy">Easy</option>
-                    <option value="moderate">Moderate</option>
-                    <option value="challenging">Challenging</option>
+                    <option value="food">Food & Drink</option>
                   </select>
                 </div>
               </div>
+
               <div style={styles.formGroup}>
                 <label style={styles.label}>Meeting Point *</label>
                 <input type="text" name="meetingPoint" value={formData.meetingPoint} onChange={handleChange} required style={styles.input} placeholder="e.g., Main Square, City Center" />
               </div>
-              <button type="submit" style={styles.submitButton}>Create Tour</button>
+
+              <button type="submit" style={styles.submitButton} disabled={submitting}>
+                {submitting ? 'Creating...' : 'Create Tour'}
+              </button>
             </form>
           </div>
         )}
 
-        {/* NEW: Recent Bookings Section */}
+        {/* Recent Bookings Section */}
         <div style={styles.section}>
             <h2 style={styles.sectionTitle}>Recent Bookings</h2>
             {myBookings.length === 0 ? (
@@ -234,11 +305,7 @@ const GuideDashboardPage = () => {
                                 <p><strong>Date:</strong> {booking.startDate?.toDate ? booking.startDate.toDate().toLocaleDateString() : booking.startDate}</p>
                                 <p><strong>Guests:</strong> {booking.numberOfParticipants}</p>
                             </div>
-                            {/* NEW BUTTON: Message Traveler */}
-                            <button 
-                                onClick={() => handleMessageTraveler(booking)} 
-                                style={styles.messageButton}
-                            >
+                            <button onClick={() => handleMessageTraveler(booking)} style={styles.messageButton}>
                                 💬 Message Traveler
                             </button>
                         </div>
@@ -262,23 +329,33 @@ const GuideDashboardPage = () => {
             <div style={styles.toursGrid}>
               {myTours.map((tour) => (
                 <div key={tour.tourId} style={styles.tourCard}>
-                  <div style={styles.tourHeader}>
-                    <h3 style={styles.tourTitle}>{tour.title}</h3>
-                    <span style={tour.isActive ? styles.statusActive : styles.statusInactive}>
-                      {tour.isActive ? '✅ Active' : '❌ Inactive'}
-                    </span>
+                  {/* Display Uploaded Image */}
+                  <div style={{height: '200px', overflow: 'hidden', borderBottom: '1px solid #eee'}}>
+                    <img 
+                        src={tour.images?.[0] || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800'} 
+                        alt={tour.title} 
+                        style={{width: '100%', height: '100%', objectFit: 'cover'}}
+                    />
                   </div>
-                  <p style={styles.tourLocation}>📍 {tour.location}</p>
-                  <div style={styles.tourDetails}>
-                    <span><strong>${tour.price}</strong></span>
-                    <span>•</span>
-                    <span>{tour.duration}</span>
-                    <span>•</span>
-                    <span>{tour.category}</span>
-                  </div>
-                  <div style={styles.tourStats}>
-                    <span>⭐ {tour.averageRating?.toFixed(1) || 'New'}</span>
-                    <span>👥 {tour.bookings || 0} bookings</span>
+                  <div style={{padding: '20px'}}>
+                    <div style={styles.tourHeader}>
+                        <h3 style={styles.tourTitle}>{tour.title}</h3>
+                        <span style={tour.isActive ? styles.statusActive : styles.statusInactive}>
+                        {tour.isActive ? '✅ Active' : '❌ Inactive'}
+                        </span>
+                    </div>
+                    <p style={styles.tourLocation}>📍 {tour.location}</p>
+                    <div style={styles.tourDetails}>
+                        <span><strong>${tour.price}</strong></span>
+                        <span>•</span>
+                        <span>{tour.duration}</span>
+                        <span>•</span>
+                        <span>{tour.category}</span>
+                    </div>
+                    <div style={styles.tourStats}>
+                        <span>⭐ {tour.averageRating?.toFixed(1) || 'New'}</span>
+                        <span>👥 {tour.bookings || 0} bookings</span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -419,6 +496,37 @@ const styles = {
     marginTop: '20px',
     transition: 'all 0.3s',
   },
+  // NEW: Image Upload Styles
+  imageUploadWrapper: {
+      width: '100%',
+      height: '200px',
+      border: '2px dashed #ccc',
+      borderRadius: '12px',
+      overflow: 'hidden',
+      cursor: 'pointer',
+      background: '#f9f9f9'
+  },
+  imageUploadBox: {
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer'
+  },
+  imagePreview: {
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover'
+  },
+  imagePlaceholder: {
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '10px',
+      color: '#999',
+      fontSize: '14px'
+  },
   // Bookings Section Styles
   bookingsGrid: {
       display: 'grid',
@@ -467,7 +575,6 @@ const styles = {
       fontWeight: '600',
       transition: '0.2s'
   },
-  // Existing styles
   toursSection: {
     marginTop: '40px',
   },
@@ -508,9 +615,9 @@ const styles = {
   },
   tourCard: {
     background: 'white',
-    padding: '24px',
     borderRadius: '12px',
     boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+    overflow: 'hidden'
   },
   tourHeader: {
     display: 'flex',
@@ -567,7 +674,7 @@ const styles = {
     minHeight: '100vh',
   },
   button: {
-    padding: '12px 24px',
+    padding: '12px 32px',
     background: COLORS.primary,
     color: 'white',
     border: 'none',
