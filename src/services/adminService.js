@@ -7,7 +7,8 @@ import {
     query, 
     orderBy, 
     where,
-    getCountFromServer
+    getCountFromServer,
+    getDoc // Added getDoc
 } from 'firebase/firestore';
 import { db } from '../firebase.js';
 
@@ -15,12 +16,10 @@ export const adminService = {
     // 1. GET DASHBOARD STATS
     getStats: async () => {
         try {
-            // Get counts (this is efficient in Firestore)
             const usersSnap = await getCountFromServer(collection(db, 'users'));
             const toursSnap = await getCountFromServer(collection(db, 'tours'));
             const bookingsSnap = await getCountFromServer(collection(db, 'bookings'));
             
-            // Calculate Revenue (Fetch confirmed bookings)
             const q = query(collection(db, 'bookings'), where('paymentStatus', '==', 'completed'));
             const revenueSnap = await getDocs(q);
             const totalRevenue = revenueSnap.docs.reduce((sum, doc) => sum + (doc.data().totalPrice || 0), 0);
@@ -51,15 +50,37 @@ export const adminService = {
 
     verifyGuide: async (userId) => {
         try {
-            const userRef = doc(db, 'guides', userId); // Update guide profile
-            const userDocRef = doc(db, 'users', userId); // Update main user doc
+            const userRef = doc(db, 'guides', userId);
+            const userDocRef = doc(db, 'users', userId);
             
             await updateDoc(userRef, { isVerified: true });
-            // Sometimes isVerified is stored in users collection too for easy access
             await updateDoc(userDocRef, { isVerified: true }); 
             return { success: true };
         } catch (error) {
             console.error("Error verifying guide:", error);
+            throw error;
+        }
+    },
+
+    // === NEW: DELETE USER FUNCTION ===
+    deleteUser: async (userId) => {
+        try {
+            // 1. Check role to clean up 'guides' collection if necessary
+            const userRef = doc(db, 'users', userId);
+            const userSnap = await getDoc(userRef);
+            
+            if (userSnap.exists()) {
+                const userData = userSnap.data();
+                if (userData.role === 'guide') {
+                    await deleteDoc(doc(db, 'guides', userId));
+                }
+            }
+
+            // 2. Delete from users collection
+            await deleteDoc(userRef);
+            return { success: true };
+        } catch (error) {
+            console.error("Error deleting user:", error);
             throw error;
         }
     },
